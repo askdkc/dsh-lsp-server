@@ -1,0 +1,23 @@
+- insert:
+    - id: lsp
+      name: '@deepseek-ai/dsh-lsp'
+
+    - id: lsp-webstack-provider
+      name: '@askdkc/dsh-lsp-webstack/provider'
+      config:
+        missingServerPolicy: warn
+
+    - id: tool-lsp
+      name: '@deepseek-ai/dsh-tool-lsp'
+      config:
+        maxLocations: 200
+        maxResultChars: 32000
+        timeoutMs: 60000
+
+    - id: tool-lsp-extra
+      name: '@askdkc/dsh-lsp-webstack/extra-tool'
+      config:
+        maxDiagnostics: 200
+        maxCompletions: 100
+        maxResultChars: 32000
+        timeoutMs: 60000
