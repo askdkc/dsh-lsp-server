@@ -96,7 +96,9 @@
   "packageManager": "pnpm@9.15.9",
   "pnpm": {
     "overrides": {
-      "tsdown>rolldown": "1.0.0-beta.38"
+      "tsdown>rolldown": "1.0.0-beta.38",
+      "svelte-language-server>svelte": "5.55.7",
+      "vite": "6.4.3"
     }
   },
   "license": "MIT",
@@ -107,7 +109,11 @@
   "overrides": {
     "tsdown": {
       "rolldown": "1.0.0-beta.38"
-    }
+    },
+    "svelte-language-server": {
+      "svelte": "5.55.7"
+    },
+    "vite": "6.4.3"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
