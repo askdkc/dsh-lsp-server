@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdtemp, readFile, mkdir, symlink, rm, writeFile, access } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, mkdir, symlink, rm, writeFile, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
@@ -9,11 +9,13 @@ it('loads the packed exports, declarations, CLI and provider from an isolated co
   const root = await mkdtemp(join(tmpdir(), 'webstack-package-'))
   try {
     const manifest = JSON.parse(await readFile('package.json', 'utf8'))
-    const packed = await exec('npm', ['pack', '--ignore-scripts', '--json', '--cache', join(root, 'npm-cache'), '--pack-destination', root], { cwd: process.cwd() })
-    const archive = JSON.parse(packed.stdout)[0]
+    await exec('npm', ['pack', '--ignore-scripts', '--cache', join(root, 'npm-cache'), '--pack-destination', root], { cwd: process.cwd() })
+    // npm 10 can print prepare logs even with --ignore-scripts; stdout is not a reliable artifact manifest.
+    const archives = (await readdir(root, { withFileTypes: true })).filter(entry => entry.isFile() && entry.name.endsWith('.tgz'))
+    expect(archives).toHaveLength(1)
     const packagePath = join(root, 'node_modules', manifest.name)
     await mkdir(packagePath, { recursive: true })
-    await exec('tar', ['-xzf', join(root, archive.filename), '--strip-components=1', '-C', packagePath])
+    await exec('tar', ['-xzf', join(root, archives[0]!.name), '--strip-components=1', '-C', packagePath])
     // DSH owns the peer services; supply the actual installed peers to this separate consumer.
     for (const dependency of new Set([...Object.keys(manifest.dependencies), ...Object.keys(manifest.devDependencies)])) {
       const target = join(root, 'node_modules', dependency)
