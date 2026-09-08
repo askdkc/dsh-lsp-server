@@ -16,6 +16,22 @@ async function setup(files: Record<string, string>) {
 }
 
 describe('bundled servers through real DSH services', () => {
+  it.each(['0', '$state(0)'])('Svelte fallback compiler: hover and diagnostics with %s', async (initialValue) => {
+    // No project-local Svelte: exercise the compiler shipped with the language server.
+    const component = (value: string) => `<script lang="ts">\nlet count = ${initialValue};\nconst broken: number = ${value};\n</script>\n<p>{count} {broken}</p>\n`
+    const h = await setup({ 'App.svelte': component('"wrong"') })
+    const request = { workspaceRoot: h.root, filePath: 'App.svelte' }
+    const hover = await h.lsp.query({ ...request, operation: 'hover', position: { line: 4, character: 5 } })
+    expect(hover.kind === 'hover' && hover.hover?.contents).toContain('number')
+    const diagnostics = await h.extra.diagnostics(request)
+    const errors = diagnostics.diagnostics.filter(d => d.severity === 1)
+    expect(errors.length).toBeGreaterThan(0)
+    expect(errors.every(d => d.message.includes('not assignable'))).toBe(true)
+    await writeFile(join(h.root, 'App.svelte'), component('1'))
+    const fixed = await h.extra.diagnostics(request)
+    expect(fixed.diagnostics.filter(d => d.severity === 1)).toEqual([])
+  }, 60000)
+
   it('TypeScript: definition, references, hover, diagnostic and completion after edits', async () => {
     const h = await setup({
       'tsconfig.json': JSON.stringify({ compilerOptions: { strict: true }, include: ['*.ts'] }),

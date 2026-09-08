@@ -91,4 +91,22 @@ The packed-artifact test extracts the archive into an isolated consumer, supplie
 
 Integration tests run against the published DSH `0.0.1-rc.1` service/tool packages and Cordis 4.0.2. Contracts were also compared with upstream commit `d347e703908d0406b7a7ef80e3a0e594d86b2215` (`0.1.3-alpha.1`). The full Web UI and a source-built upstream application are not exercised here.
 
+### Dependency security
+
+This repository pins Vite to 6.4.3 (which uses patched esbuild 0.25.x) and overrides the Svelte Language Server's fallback compiler to Svelte 5.55.7. These versions address [Vite's Windows path bypass](https://github.com/advisories/GHSA-fx2h-pf6j-xcff) and the [Svelte SSR](https://github.com/advisories/GHSA-pr6f-5x2q-rwfp) / [DOM clobbering](https://github.com/advisories/GHSA-rcqx-6q8c-2c42) advisories. Run `pnpm audit` after dependency updates. The Svelte E2E tests exercise fallback compilation with both legacy and rune syntax, including diagnostics after edits.
+
+The pinned `svelte-language-server` still declares Svelte 4 as its dependency. Repository overrides and `pnpm-lock.yaml` do **not** propagate when this plugin is installed as a dependency. Until upstream changes that dependency, the host installation must apply its own override to obtain the patched fallback compiler. For npm, merge this into the installation root's `package.json`, reinstall, and run `npm audit`:
+
+```json
+{
+  "overrides": {
+    "svelte-language-server": {
+      "svelte": "5.55.7"
+    }
+  }
+}
+```
+
+For pnpm 9, use `"svelte-language-server>svelte": "5.55.7"` in the installation root's `pnpm.overrides`, reinstall, and run `pnpm audit`. See [npm's root-only override rules](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#overrides). The language server can also load a project's own Svelte compiler; project dependencies need separate updates. A clean repository audit does not establish that installed consumers or projects are clean.
+
 The provider reads current documents through `ctx.fs`, confines sources to the canonical workspace, and starts/cleans up processes through `ctx.subprocess`. It refuses `workspace/applyEdit` and never applies completion edits. Language servers themselves may read project dependencies, evaluate framework configuration, and write caches; this plugin is not an OS sandbox.
