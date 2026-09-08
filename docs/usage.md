@@ -18,9 +18,13 @@ The five Node language servers and TypeScript are package dependencies. PHPantom
 
 See the [installation commands](../README.md#install).
 
-The bundle adds `lsp`, `lsp-webstack-provider`, `tool-lsp`, and `tool-lsp-extra` rows. It requires DSH's LSP/tool packages and the profile's `fs`, `subprocess`, `tools`, and `systemPrompt` services. DSH packages are host-provided peers; installing this package alone does not install the harness. If you already enabled another LSP provider for these extensions, remove its overlapping mappings first: DSH intentionally rejects duplicate ownership with `LSP_CONFLICT`. If your profile already declares the `lsp` or `tool-lsp` rows, compose the provider and extra-tool rows manually instead of inserting the whole bundle twice.
+The bundle adds `lsp`, `lsp-webstack-provider`, `tool-lsp`, and `tool-lsp-extra` rows. Its `@deepseek-ai/dsh-lsp` and `@deepseek-ai/dsh-tool-lsp` dependencies are installed automatically; do not install them separately. The harness still provides the profile's `fs`, `subprocess`, `tools`, and `systemPrompt` services and the shared Cordis instance. Installing this package does not install the harness itself.
 
-These instructions follow [DSH's profile composition](https://github.com/deepseek-ai/deepseek-harness/blob/d347e703908d0406b7a7ef80e3a0e594d86b2215/apps/cli/README.md). No user profile is changed by this repository's tests or doctor command.
+DSH dependencies and host peers use `^0.1.3-alpha.2`. This admits subsequent `0.1.3` prereleases and stable `0.1.x` releases from `0.1.3`, but excludes `0.2.0` and prereleases with a different patch version (for example, `0.1.4-alpha.1`). Those require a compatibility review and range update. DSH `0.0.1-rc.1` is no longer supported.
+
+If you already enabled another LSP provider for these extensions, remove its overlapping mappings first: DSH intentionally rejects duplicate ownership with `LSP_CONFLICT`. If your profile already declares the `lsp` or `tool-lsp` rows, compose the provider and extra-tool rows manually instead of inserting the whole bundle twice.
+
+These instructions follow [DSH's profile composition and bundle dependency resolution](https://github.com/deepseek-ai/deepseek-harness/blob/c389f96bf3a9b6807cb71ed6bdad5849be0df6d8/packages/boot/app-boot/src/profile.ts). No user profile is changed by this repository's tests or doctor command.
 
 ## Tools
 
@@ -80,7 +84,7 @@ The JSON config file contains the provider configuration object above. Doctor ch
 
 ## Verification
 
-Source installs build automatically through `prepare`; npm releases include the built files. `.npmrc` prevents automatic resolution of the published DSH packages’ incomplete peer tree during development and Git builds.
+Source installs build automatically through `prepare`; npm releases include the built files. `.npmrc` disables automatic peer installation during development and Git builds; development dependencies provide the host services needed by the tests.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -89,9 +93,9 @@ pnpm test:e2e              # real TS/JS, HTML, CSS, Svelte, Tailwind v3/v4
 PHPANTOM_E2E=1 pnpm test:e2e # additionally tests installed PHPantom with PHP and Blade
 ```
 
-The packed-artifact test extracts the archive into an isolated consumer, supplies DSH peers, imports its public exports, and runs a real TypeScript query. It also checks declaration paths and the executable doctor. E2E needs working OS file watchers; sandboxed macOS watchers may fail with `EMFILE`.
+The packed-artifact test installs the archive into a fresh consumer with DSH's hoisted layout and peer auto-installation disabled. It provides the host service packages but does not preinstall either LSP package, then verifies bundle imports, both tool registrations, and a real TypeScript query. It also checks declaration paths and the executable doctor. The consumer install prefers cached packages but needs registry access for uncached packages or metadata. E2E needs working OS file watchers; sandboxed macOS watchers may fail with `EMFILE`.
 
-Integration tests run against the published DSH `0.0.1-rc.1` service/tool packages and Cordis 4.0.2. Contracts were also compared with upstream commit `d347e703908d0406b7a7ef80e3a0e594d86b2215` (`0.1.3-alpha.1`). The full Web UI and a source-built upstream application are not exercised here.
+Integration tests run against the published DSH `0.1.3-alpha.2` service/tool packages and Cordis 4.0.2. The full Web UI and a source-built upstream application are not exercised here.
 
 ### Dependency security
 

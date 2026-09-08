@@ -1,5 +1,5 @@
 import type { LspProviderQuery, LspQueryResult } from '@deepseek-ai/dsh-lsp'
-import type { SubprocessService } from '@deepseek-ai/dsh-subprocess'
+import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { ResolvedConfig, ServerId } from '../config.js'
 import { SERVER_IDS } from '../config.js'
 import { readSource, type HostFileSystem, type HostSource } from '../host/dsh.js'
@@ -22,7 +22,7 @@ import { mergeCompletions } from '../merge/completion.js'
 import type { CompletionRequest, CompletionResult, DiagnosticsRequest, DiagnosticsResult, LspPosition, WebstackLspStatus } from '../service.js'
 import type { JsonRpcConnection } from './connection.js'
 
-export type HostSubprocess = Pick<SubprocessService, 'spawn' | 'resolveExecutable'>
+export type HostSubprocess = Pick<SubprocessRuntime, 'spawn' | 'resolveExecutable'>
 const methods = { hover: 'textDocument/hover', goToDefinition: 'textDocument/definition', findReferences: 'textDocument/references', goToImplementation: 'textDocument/implementation' } as const
 const clientCapabilities = {
   general: { positionEncodings: ['utf-16'] },

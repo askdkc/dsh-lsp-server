@@ -1,11 +1,11 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdtemp, readFile, readdir, mkdir, symlink, rm, writeFile, access } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { expect, it } from 'vitest'
 const exec = promisify(execFile)
-it('loads the packed exports, declarations, CLI and provider from an isolated consumer', async () => {
+it('installs the packed bundle with its LSP service and tool in a fresh DSH consumer', async () => {
   const root = await mkdtemp(join(tmpdir(), 'webstack-package-'))
   try {
     const manifest = JSON.parse(await readFile('package.json', 'utf8'))
@@ -14,14 +14,33 @@ it('loads the packed exports, declarations, CLI and provider from an isolated co
     const archives = (await readdir(root, { withFileTypes: true })).filter(entry => entry.isFile() && entry.name.endsWith('.tgz'))
     expect(archives).toHaveLength(1)
     const packagePath = join(root, 'node_modules', manifest.name)
-    await mkdir(packagePath, { recursive: true })
-    await exec('tar', ['-xzf', join(root, archives[0]!.name), '--strip-components=1', '-C', packagePath])
-    // DSH owns the peer services; supply the actual installed peers to this separate consumer.
-    for (const dependency of new Set([...Object.keys(manifest.dependencies), ...Object.keys(manifest.devDependencies)])) {
-      const target = join(root, 'node_modules', dependency)
-      await mkdir(resolve(target, '..'), { recursive: true })
-      await symlink(resolve('node_modules', dependency), target, 'dir')
-    }
+    // Model the host's services, not the bundle's LSP packages. Never supply
+    // dsh-lsp/dsh-tool-lsp from devDependencies: that hides missing published dependencies.
+    const hostPackages = [
+      '@deepseek-ai/cordis', '@deepseek-ai/schemastery',
+      '@deepseek-ai/dsh-brand', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-timeout',
+      '@deepseek-ai/dsh-fs', '@deepseek-ai/dsh-fs-local',
+      '@deepseek-ai/dsh-subprocess', '@deepseek-ai/dsh-subprocess-local', '@deepseek-ai/dsh-http-proxy',
+      '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-system-prompt', '@deepseek-ai/dsh-scope', '@deepseek-ai/dsh-session',
+    ]
+    const dependencies = Object.fromEntries(await Promise.all(hostPackages.map(async name => {
+      const host = JSON.parse(await readFile(join('node_modules', name, 'package.json'), 'utf8'))
+      return [name, host.version]
+    })))
+    await writeFile(join(root, 'package.json'), JSON.stringify({
+      private: true, type: 'module', packageManager: manifest.packageManager,
+      dependencies: { ...dependencies, [manifest.name]: `file:${join(root, archives[0]!.name)}` },
+    }))
+    // Match DSH's profile layout and disabled peer auto-installation.
+    await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - .\nnodeLinker: hoisted\nautoInstallPeers: false\n')
+    // pnpm 9 reads these settings from CLI/.npmrc; newer DSH installations
+    // use pnpm versions that also read them from pnpm-workspace.yaml.
+    await exec('pnpm', [
+      'install', '--prefer-offline', '--ignore-scripts',
+      '--config.node-linker=hoisted', '--config.auto-install-peers=false',
+    ], { cwd: root, timeout: 90000 }).catch(error => {
+      throw new Error(`Consumer install failed:\n${error.stdout}\n${error.stderr}`, { cause: error })
+    })
     for (const entry of Object.values(manifest.exports) as Array<string | { types: string; default: string }>) {
       if (typeof entry === 'object') { await access(join(packagePath, entry.types)); await access(join(packagePath, entry.default)) }
     }
@@ -32,6 +51,9 @@ it('loads the packed exports, declarations, CLI and provider from an isolated co
     await writeFile(join(root, 'smoke.mjs'), `
       import { Context } from '@deepseek-ai/cordis';
       import Lsp from '@deepseek-ai/dsh-lsp';
+      import * as standard from '@deepseek-ai/dsh-tool-lsp';
+      import Tools from '@deepseek-ai/dsh-tools';
+      import Prompt from '@deepseek-ai/dsh-system-prompt';
       import Fs from '@deepseek-ai/dsh-fs-local';
       import Subprocess from '@deepseek-ai/dsh-subprocess-local';
       import * as provider from '${manifest.name}/provider';
@@ -42,6 +64,9 @@ it('loads the packed exports, declarations, CLI and provider from an isolated co
         await ctx.plugin(Fs, {cwd: process.cwd()}); await ctx.plugin(Subprocess); await ctx.plugin(Lsp);
         await ctx.plugin(provider, { servers: {phpantom: {enabled:false}}, tailwind:{enabled:false} });
         const result = await ctx.get('lsp').query({workspaceRoot:process.cwd(),filePath:'app.ts',operation:'hover',position:{line:1,character:14}});
+        await ctx.plugin(Prompt, {}); await ctx.plugin(Tools, {});
+        await ctx.plugin(standard, {}); await ctx.plugin(extra, {});
+        if (!ctx.get('tools').get('lsp') || !ctx.get('tools').get('lsp_extra')) throw new Error('missing bundled tools');
         if (extra.name !== 'lsp_extra' || result.kind !== 'hover' || !result.hover?.contents.includes('string')) throw new Error('bad packed provider');
         console.log('packed provider ok');
       } finally { await ctx.fiber.dispose(); }

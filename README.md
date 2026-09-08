@@ -6,7 +6,7 @@ Supports PHP/Blade via **PHPantom**, TypeScript/JavaScript, Svelte, HTML, CSS, a
 
 ## Install
 
-Requires Node.js **22.18+**. For PHP/Blade, install **PHPantom** with `phpantom_lsp` in `PATH`. The other language servers are included.
+Requires Node.js **22.18+** and DSH **0.1.3-alpha.2 or a compatible later 0.1.x release**. The required `@deepseek-ai/dsh-lsp` and `@deepseek-ai/dsh-tool-lsp` packages are installed automatically. For PHP/Blade, install **PHPantom** with `phpantom_lsp` in `PATH`. The other language servers are included.
 
 From npm:
 

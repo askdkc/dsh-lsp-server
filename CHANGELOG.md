@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Install the required DSH LSP service and tool automatically; require DSH `^0.1.3-alpha.2` and validate against `0.1.3-alpha.2`.
 - Connect the provider and extra tool to actual DSH services, schemas, session workspaces, and plugin disposal.
 - Implement real navigation, diagnostics, completion, document synchronization, configuration replies, timeouts, and bounded process cleanup.
 - Add CSS routing, Tailwind candidate ranking, executable availability checks, and working packaged CLI/declarations.
