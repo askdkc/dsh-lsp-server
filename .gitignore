@@ -1,10 +1,22 @@
+# Dependencies and generated output
 node_modules/
 .pnpm-store/
 lib/
 coverage/
 *.tgz
+*.tsbuildinfo
+.cache/
+
+# Local tooling and package-manager logs
+.codex/
 pnpm-workspace.yaml
+npm-debug.log*
+pnpm-debug.log*
+
+# Local environment and OS files
 .DS_Store
 .env
 .env.*
 !.env.example
+
+# Keep .npmrc and pnpm-lock.yaml versioned for reproducible installs.

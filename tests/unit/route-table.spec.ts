@@ -9,8 +9,8 @@ describe('route table', () => {
     expect(routeFor(file!)).toEqual({ primary: { server: 'phpantom', languageId: 'blade' }, auxiliary: { server: 'tailwind', languageId: 'html' } })
   })
 
-  it('uses TypeScript Language Server for JavaScript and primary Tailwind for CSS', () => {
+  it('uses TypeScript Language Server for JavaScript and CSS server with auxiliary Tailwind for CSS', () => {
     expect(routeFor(classifyFile('src/app.jsx')!)).toMatchObject({ primary: { server: 'typescript', languageId: 'javascriptreact' } })
-    expect(routeFor(classifyFile('src/app.css')!)).toEqual({ primary: { server: 'tailwind', languageId: 'css' } })
+    expect(routeFor(classifyFile('src/app.css')!)).toEqual({ primary: { server: 'css', languageId: 'css' }, auxiliary: { server: 'tailwind', languageId: 'css' } })
   })
 })

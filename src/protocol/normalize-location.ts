@@ -6,6 +6,7 @@ export interface NormalizedLocation {
 }
 
 export function normalizeLocation(value: unknown): NormalizedLocation | undefined {
+  if (isRecord(value) && typeof value.targetUri === 'string' && isRange(value.targetSelectionRange)) return { uri: value.targetUri, range: value.targetSelectionRange }
   if (!isRecord(value) || typeof value.uri !== 'string' || !isRange(value.range)) return undefined
   return { uri: value.uri, range: value.range }
 }

@@ -11,6 +11,7 @@ export function normalizeCompletionItem(value: unknown, server: string): Normali
     ...(typeof value.sortText === 'string' ? { sortText: value.sortText } : {}),
     ...(typeof value.filterText === 'string' ? { filterText: value.filterText } : {}),
     ...(typeof value.insertText === 'string' ? { insertText: value.insertText } : {}),
+    ...(typeof value.insertTextFormat === 'number' ? { insertTextFormat: value.insertTextFormat } : {}),
     ...(typeof value.deprecated === 'boolean' ? { deprecated: value.deprecated } : {}),
   }
 }

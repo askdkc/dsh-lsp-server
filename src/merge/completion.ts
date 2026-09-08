@@ -7,14 +7,15 @@ export function mergeCompletions(groups: ReadonlyArray<ReadonlyArray<NormalizedC
   const items: NormalizedCompletionItem[] = []
   let characters = 0
   let omitted = 0
+  let omittedCharacters = 0
   for (const group of groups) for (const item of group) {
     const key = `${item.label}|${item.insertText ?? ''}|${item.detail ?? ''}`
     if (seen.has(key)) continue
     seen.add(key)
     const size = JSON.stringify(item).length
-    if (items.length >= limits.maxCompletions || characters + size > limits.maxResultChars) { omitted += 1; continue }
+    if (items.length >= limits.maxCompletions || characters + size > limits.maxResultChars) { omitted += 1; omittedCharacters += size; continue }
     characters += size
     items.push({ ...item })
   }
-  return omitted === 0 ? { items } : { items, truncated: { items: omitted, characters: Math.max(0, seen.size - items.length) } }
+  return omitted === 0 ? { items } : { items, truncated: { items: omitted, characters: omittedCharacters } }
 }
