@@ -24,7 +24,10 @@ export class JsonRpcConnection {
     input.on('data', (chunk: Buffer) => this.receive(chunk))
     input.once('end', () => this.close(new Error('LSP process closed stdout')))
     input.once('error', (error) => this.close(error))
+    output.on('error', (error) => this.close(error))
   }
+
+  get isOpen(): boolean { return !this.closed }
 
   onNotification(listener: (notification: JsonRpcNotification) => void): () => void {
     this.notificationListeners.add(listener)
@@ -40,13 +43,14 @@ export class JsonRpcConnection {
     if (this.closed) throw new Error('connection is closed')
     const id = this.nextId++
     const promise = new Promise<unknown>((resolve, reject) => this.pending.set(id, { resolve, reject, method }))
+    void promise.catch(() => {})
     const remove = onAbort(signal, () => {
-      this.notify('$/cancelRequest', { id })
+      void this.notify('$/cancelRequest', { id }).catch(() => {})
       this.pending.get(id)?.reject(abortError())
       this.pending.delete(id)
     })
     try {
-      await this.write({ jsonrpc: '2.0', id, method, ...(params === undefined ? {} : { params }) })
+      void this.write({ jsonrpc: '2.0', id, method, ...(params === undefined ? {} : { params }) }).catch(error => this.close(error))
       return await promise
     } finally {
       remove()
@@ -83,7 +87,7 @@ export class JsonRpcConnection {
     if ('method' in value && typeof value.method === 'string') {
       if ('id' in value) {
         const request = value as unknown as JsonRpcRequest
-        Promise.resolve(this.requestHandler(request.method, request.params)).then(
+        Promise.resolve().then(() => this.requestHandler(request.method, request.params)).then(
           (result) => this.write({ jsonrpc: '2.0', id: request.id, result }),
           (error: unknown) => this.write({ jsonrpc: '2.0', id: request.id, error: { code: -32603, message: error instanceof Error ? error.message : 'server request failed' } }),
         ).catch(() => {})

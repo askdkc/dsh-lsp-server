@@ -1,87 +1,104 @@
-import type { ChildProcess } from 'node:child_process'
-import type { InitializeParams, InitializeResult, JsonRpcConnectionOptions } from '../protocol/types.js'
+import type { SubprocessHandle } from '@deepseek-ai/dsh-subprocess'
+import type { InitializeParams, InitializeResult } from '../protocol/types.js'
 import { initializeServer } from '../protocol/initialize.js'
-import { defaultServerRequest } from '../protocol/capabilities.js'
 import { JsonRpcConnection } from './connection.js'
-import { terminateProcess, type ShutdownOptions, StderrTail } from './process-lifecycle.js'
+import { withAbort, throwIfAborted } from './cancellation.js'
 
 export type SessionState = 'NEW' | 'STARTING' | 'READY' | 'STOPPING' | 'STOPPED' | 'FAILED'
-
 export interface ServerSessionOptions {
-  spawn(): ChildProcess
+  spawn(): SubprocessHandle
   initialize: InitializeParams
+  configuration: unknown
   maxMessageBytes: number
-  maxStderrBytes: number
-  shutdown: ShutdownOptions
-  onNotification?: JsonRpcConnectionOptions['onNotification']
+  shutdown: { shutdownMs: number; killGraceMs: number }
 }
 
 export class ServerSession {
   state: SessionState = 'NEW'
   capabilities: Record<string, unknown> = {}
-  restarts = 0
-  readonly stderr: StderrTail
-  private child: ChildProcess | undefined
-  private connection: JsonRpcConnection | undefined
-  private operation: Promise<void> = Promise.resolve()
-
-  constructor(private readonly options: ServerSessionOptions) {
-    this.stderr = new StderrTail(options.maxStderrBytes)
-  }
+  private child?: SubprocessHandle
+  private connection?: JsonRpcConnection
+  private stopping?: Promise<void>
+  private readonly lifetime = new AbortController()
+  constructor(private readonly options: ServerSessionOptions) {}
 
   async start(signal?: AbortSignal): Promise<InitializeResult> {
-    if (this.state === 'READY' && this.connection) return { capabilities: this.capabilities }
-    if (this.state === 'STOPPING' || this.state === 'STOPPED') throw new Error('session is stopped')
-    if (this.state === 'STARTING') throw new Error('session is already starting')
+    throwIfAborted(signal)
     this.state = 'STARTING'
     try {
       const child = this.options.spawn()
-      if (!child.stdout || !child.stdin || !child.stderr) throw new Error('server stdio is unavailable')
       this.child = child
-      child.stderr.on('data', (chunk: Buffer) => this.stderr.append(chunk))
-      child.once('error', () => { if (this.state === 'READY') this.state = 'FAILED' })
-      child.once('close', () => { if (this.state !== 'STOPPING' && this.state !== 'STOPPED') this.state = 'FAILED' })
+      // Observe failed spawn even when stdio could not be allocated.
+      void child.done.catch(() => {})
+      if (!child.stdout || !child.stdin) throw new Error('server stdio is unavailable')
       const connection = new JsonRpcConnection(child.stdout, child.stdin, {
         maxMessageBytes: this.options.maxMessageBytes,
-        ...(this.options.onNotification === undefined ? {} : { onNotification: this.options.onNotification }),
-        onServerRequest: defaultServerRequest,
+        onServerRequest: (method, params) => this.answer(method, params),
       })
       this.connection = connection
-      const result = await initializeServer(connection, this.options.initialize, signal)
-      this.capabilities = { ...result.capabilities }
+      void child.done.then(() => connection.close(new Error('LSP process exited')), error => connection.close(error instanceof Error ? error : new Error('LSP spawn failed'))).then(() => {
+        if (this.state !== 'STOPPING' && this.state !== 'STOPPED') this.state = 'FAILED'
+      })
+      const result = await initializeServer(connection, this.options.initialize, this.signal(signal))
+      if (result.capabilities.positionEncoding && result.capabilities.positionEncoding !== 'utf-16') throw new Error('server requires unsupported position encoding')
+      const sync = result.capabilities.textDocumentSync
+      if (sync === undefined || sync === 0 || (typeof sync === 'object' && sync !== null && !(sync as { openClose?: boolean }).openClose)) throw new Error('server does not support document open/close')
+      this.capabilities = result.capabilities
+      await connection.notify('workspace/didChangeConfiguration', { settings: this.options.configuration })
+      throwIfAborted(this.signal(signal))
       this.state = 'READY'
       return result
     } catch (error) {
       this.state = 'FAILED'
-      await this.stop().catch(() => {})
+      await this.stop()
       throw error
     }
   }
 
+  get usable(): boolean { return this.state === 'READY' && !!this.connection?.isOpen }
+  isUsable(): boolean { return this.usable }
   async run<T>(task: (connection: JsonRpcConnection) => Promise<T>, signal?: AbortSignal): Promise<T> {
-    const previous = this.operation
-    let release!: () => void
-    this.operation = new Promise<void>((resolve) => { release = resolve })
-    await previous
-    try {
-      if (this.state !== 'READY' || !this.connection) throw new Error('session is not ready')
-      return await task(this.connection)
-    } finally {
-      release()
+    if (!this.usable || !this.connection) throw new Error('session is not ready')
+    try { return await withAbort(task(this.connection), this.signal(signal)) }
+    catch (error) {
+      // Stop cancelled work before the next queued request can reuse this process.
+      if (signal?.aborted || !this.connection.isOpen) await this.stop()
+      throw error
     }
   }
 
-  async stop(): Promise<void> {
-    if (this.state === 'STOPPED') return
+  stop(): Promise<void> {
+    return this.stopping ??= this.teardown()
+  }
+  private async teardown(): Promise<void> {
     this.state = 'STOPPING'
-    this.connection?.close(new Error('session stopped'))
-    if (this.child) await terminateProcess(this.child, this.options.shutdown)
-    this.child = undefined
-    this.connection = undefined
+    this.lifetime.abort()
+    const child = this.child, connection = this.connection
+    const timeout = AbortSignal.timeout(this.options.shutdown.shutdownMs)
+    if (connection?.isOpen) {
+      try { await connection.request('shutdown', null, timeout); await connection.notify('exit') } catch {}
+    }
+    connection?.close(new Error('session stopped'))
+    if (child) {
+      child.terminate()
+      if (!await child.waitForExit(AbortSignal.timeout(this.options.shutdown.killGraceMs + 1000))) throw new Error('language server process tree did not exit within the cleanup deadline')
+    }
     this.state = 'STOPPED'
   }
-
-  isUsable(): boolean {
-    return this.state === 'READY' && this.connection !== undefined
+  private signal(signal?: AbortSignal): AbortSignal { return signal ? AbortSignal.any([signal, this.lifetime.signal]) : this.lifetime.signal }
+  private answer(method: string, params: unknown): unknown {
+    if (method === 'workspace/applyEdit') return { applied: false, failureReason: 'read-only provider' }
+    if (method === 'workspace/workspaceFolders') return this.options.initialize.workspaceFolders ?? []
+    if (method === 'workspace/configuration') {
+      const items = (params as { items?: Array<{ section?: string }> } | undefined)?.items ?? []
+      return items.map(item => {
+        let value = this.options.configuration
+        for (const key of item.section?.split('.') ?? []) {
+          value = typeof value === 'object' && value !== null ? (value as Record<string, unknown>)[key] : undefined
+        }
+        return value ?? null
+      })
+    }
+    return null
   }
 }

@@ -1,3 +1,5 @@
+import { LspError } from '@deepseek-ai/dsh-lsp'
+
 export type WebstackErrorCode =
   | 'LSP_UNAVAILABLE'
   | 'LSP_UNSUPPORTED_OPERATION'
@@ -7,13 +9,12 @@ export type WebstackErrorCode =
   | 'LSP_WORKSPACE_REQUIRED'
   | 'LSP_WEBSTACK_CONFIG_INVALID'
 
-export class WebstackLspError extends Error {
-  readonly code: WebstackErrorCode
+export class WebstackLspError extends LspError {
+  declare readonly code: WebstackErrorCode
 
   constructor(code: WebstackErrorCode, message: string, options?: ErrorOptions) {
-    super(message, options)
+    super(message, code, options)
     this.name = 'WebstackLspError'
-    this.code = code
   }
 }
 

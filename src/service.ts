@@ -18,13 +18,13 @@ export interface NormalizedDiagnostic {
   tags?: number[]
   servers?: string[]
 }
-export interface NormalizedCompletionItem { server: string; label: string; kind?: number; detail?: string; documentation?: string; sortText?: string; filterText?: string; insertText?: string; deprecated?: boolean }
+export interface NormalizedCompletionItem { server: string; label: string; kind?: number; detail?: string; documentation?: string; sortText?: string; filterText?: string; insertText?: string; insertTextFormat?: number; deprecated?: boolean }
 export interface DiagnosticsResult { diagnostics: NormalizedDiagnostic[]; omittedServers?: string[]; truncated?: { diagnostics: number; characters: number } }
 export interface CompletionResult { items: NormalizedCompletionItem[]; truncated?: { items: number; characters: number } }
 
 export interface WebstackLspStatus {
   providerId: string
-  servers: Array<{ id: 'phpantom' | 'typescript' | 'svelte' | 'html' | 'tailwind'; enabled: boolean; available: boolean; source: 'bundled' | 'path'; command?: string; version?: string; lastError?: string; liveWorkspaces: number; restarts: number }>
+  servers: Array<{ id: import('./config.js').ServerId; enabled: boolean; available: boolean; source: 'bundled' | 'path'; command?: string; version?: string; lastError?: string; liveWorkspaces: number; restarts: number }>
 }
 
 export interface WebstackLspService {

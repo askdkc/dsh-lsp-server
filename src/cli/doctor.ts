@@ -2,7 +2,10 @@
 import { basename } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { WebstackLspService } from '../service.js'
-import { createUnavailableService } from '../service.js'
+import { resolveConfig } from '../config.js'
+import { localStatusService } from './availability.js'
+import { readFile } from 'node:fs/promises'
+import { realpathSync } from 'node:fs'
 
 export interface DoctorOptions { json?: boolean; deep?: boolean }
 export interface DoctorIssue { code: string; severity: 'warning' | 'error'; message: string }
@@ -51,9 +54,19 @@ function redactMessage(message: string): string {
 
 async function main(): Promise<void> {
   const args = new Set(process.argv.slice(2))
-  const output = await runDoctor(createUnavailableService(), { json: args.has('--json'), deep: args.has('--deep') })
+  const configIndex = process.argv.indexOf('--config')
+  const configPath = configIndex >= 0 ? process.argv[configIndex + 1] : undefined
+  if (configIndex >= 0 && (!configPath || configPath.startsWith('--'))) throw new Error('--config requires a JSON file path')
+  const service = localStatusService(resolveConfig(configPath ? JSON.parse(await readFile(configPath, 'utf8')) : {}))
+  const options = { json: args.has('--json'), deep: args.has('--deep') }
+  const report = await collectDoctorReport(service, options)
+  const output = options.json ? JSON.stringify(report, null, 2) : await runDoctor(service, options)
   process.stdout.write(`${output}\n`)
-  if (!args.has('--json')) process.exitCode = output.includes('attention required') ? 1 : 0
+  process.exitCode = report.ok ? 0 : 1
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) void main()
+function isMain(): boolean {
+  try { return !!process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href } catch { return false }
+}
+
+if (isMain()) void main().catch(error => { process.stderr.write(`${error instanceof Error ? error.message : 'doctor failed'}\n`); process.exitCode = 1 })

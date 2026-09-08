@@ -15,7 +15,7 @@ const ROUTES: Record<ClassifiedFile['kind'], Route> = {
   javascriptreact: { primary: { server: 'typescript', languageId: 'javascriptreact' }, auxiliary: { server: 'tailwind', languageId: 'javascriptreact' } },
   svelte: { primary: { server: 'svelte', languageId: 'svelte' }, auxiliary: { server: 'tailwind', languageId: 'svelte' } },
   html: { primary: { server: 'html', languageId: 'html' }, auxiliary: { server: 'tailwind', languageId: 'html' } },
-  css: { primary: { server: 'tailwind', languageId: 'css' } },
+  css: { primary: { server: 'css', languageId: 'css' }, auxiliary: { server: 'tailwind', languageId: 'css' } },
 }
 
 export function routeFor(file: ClassifiedFile): Route {

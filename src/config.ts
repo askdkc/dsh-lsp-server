@@ -1,6 +1,6 @@
 import { configError } from './errors.js'
 
-export type ServerId = 'phpantom' | 'typescript' | 'svelte' | 'html' | 'tailwind'
+export type ServerId = 'phpantom' | 'typescript' | 'svelte' | 'html' | 'css' | 'tailwind'
 export type ServerMode = 'bundled' | 'path'
 
 export interface ServerConfig {
@@ -90,6 +90,7 @@ const SERVER_COMMANDS: Record<ServerId, string> = {
   typescript: 'typescript-language-server',
   svelte: 'svelteserver',
   html: 'vscode-html-language-server',
+  css: 'vscode-css-language-server',
   tailwind: 'tailwindcss-language-server',
 }
 
@@ -98,10 +99,11 @@ const DEFAULT_SERVER_MODES: Record<ServerId, ServerMode> = {
   typescript: 'bundled',
   svelte: 'bundled',
   html: 'bundled',
+  css: 'bundled',
   tailwind: 'bundled',
 }
 
-const SERVER_IDS: ServerId[] = ['phpantom', 'typescript', 'svelte', 'html', 'tailwind']
+export const SERVER_IDS: ServerId[] = ['phpantom', 'typescript', 'svelte', 'html', 'css', 'tailwind']
 const DEFAULT_LIMITS = { maxDocumentBytes: 1_048_576, maxMessageBytes: 8_388_608, maxStderrBytes: 65_536 }
 const DEFAULT_TIMEOUTS = { navigationMs: 60_000, primaryHoverMs: 30_000, auxiliaryHoverMs: 8_000, diagnosticsMs: 60_000, completionMs: 15_000, shutdownMs: 5_000, killGraceMs: 1_000 }
 
@@ -127,7 +129,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readPositiveInteger(value: unknown, label: string, fallback: number): number {
   if (value === undefined) return fallback
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) throw configError(`${label} must be a positive integer`)
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0 || value > 2_147_483_647) throw configError(`${label} must be a positive integer no greater than 2147483647`)
   return value
 }
 
@@ -139,7 +141,7 @@ function readBoolean(value: unknown, label: string, fallback: boolean): boolean 
 
 function readString(value: unknown, label: string, fallback: string): string {
   if (value === undefined) return fallback
-  if (typeof value !== 'string' || value.length === 0) throw configError(`${label} must be a non-empty string`)
+  if (typeof value !== 'string' || value.trim().length === 0 || value.includes('\u0000')) throw configError(`${label} must be a non-empty string without NUL`)
   return value
 }
 
@@ -178,6 +180,7 @@ function resolveServer(id: ServerId, value: unknown): ResolvedServerConfig {
   const input = value as Record<string, unknown> | undefined
   const mode = input?.mode === undefined ? DEFAULT_SERVER_MODES[id] : input.mode
   if (mode !== 'bundled' && mode !== 'path') throw configError(`servers.${id}.mode must be bundled or path`)
+  if (id === 'phpantom' && mode === 'bundled') throw configError('PHPantom must use path mode')
   const command = input?.command === undefined ? SERVER_COMMANDS[id] : readString(input.command, `servers.${id}.command`, SERVER_COMMANDS[id])
   if (mode === 'path' && input?.command === undefined && id !== 'phpantom') throw configError(`servers.${id}.command is required in path mode`)
   const argsValue = input?.args
@@ -206,6 +209,11 @@ export function resolveConfig(input: unknown = {}): ResolvedConfig {
   const classRegex = tailwind.classRegex
   if (classRegex !== undefined && (!Array.isArray(classRegex) || classRegex.some((item) => typeof item !== 'string' && (!Array.isArray(item) || item.length !== 2 || item.some((part) => typeof part !== 'string'))))) throw configError('tailwind.classRegex must contain strings or string pairs')
   const queryStrategy = tailwind.queryStrategy === undefined ? 'candidate' : tailwind.queryStrategy
+  for (const expression of (classRegex ?? []) as Array<string | [string, string]>) {
+    for (const pattern of Array.isArray(expression) ? expression : [expression]) {
+      try { new RegExp(pattern) } catch { throw configError('tailwind.classRegex contains an invalid regular expression') }
+    }
+  }
   if (queryStrategy !== 'candidate' && queryStrategy !== 'always') throw configError('tailwind.queryStrategy must be candidate or always')
   const includeLanguages = resolveEnv(tailwind.includeLanguages, 'tailwind.includeLanguages')
   return {

@@ -3,9 +3,15 @@
       name: '@deepseek-ai/dsh-lsp'
 
     - id: lsp-webstack-provider
-      name: '@askdkc/dsh-lsp-webstack/provider'
+      name: '@askdkc/dsh-lsp-server/provider'
       config:
         missingServerPolicy: warn
+        servers:
+          phpantom:
+            enabled: true
+            mode: path
+            command: phpantom_lsp
+            args: ['--stdio']
 
     - id: tool-lsp
       name: '@deepseek-ai/dsh-tool-lsp'
@@ -15,7 +21,7 @@
         timeoutMs: 60000
 
     - id: tool-lsp-extra
-      name: '@askdkc/dsh-lsp-webstack/extra-tool'
+      name: '@askdkc/dsh-lsp-server/extra-tool'
       config:
         maxDiagnostics: 200
         maxCompletions: 100
