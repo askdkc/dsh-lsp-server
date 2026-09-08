@@ -5,6 +5,7 @@ const mode = process.argv[2] ?? 'normal'
 const trace = process.argv[3]
 const send = message => { const body = Buffer.from(JSON.stringify({ jsonrpc: '2.0', ...message })); process.stdout.write(`Content-Length: ${body.length}\r\n\r\n`); process.stdout.write(body) }
 let source, uri, settings, edit
+let pendingCloseDiagnostics
 const waiting = []
 const hover = id => send({id, result: { contents: JSON.stringify({ source, settings, edit, marker: process.env.WEBSTACK_TEST_MARKER }) }})
 const flush = () => { if (settings && edit) for (const id of waiting.splice(0)) hover(id) }
@@ -20,13 +21,22 @@ process.stdin.on('data', chunk => {
     if (message.id === 'edit') { edit = message.result; flush(); continue }
     if (message.method === 'initialize') {
       if (mode === 'hang-init') continue
-      send({ id: message.id, result: { capabilities: { textDocumentSync: 1, hoverProvider: true, definitionProvider: true, completionProvider: {}, positionEncoding: 'utf-16' } } })
+      send({ id: message.id, result: { capabilities: { textDocumentSync: 1, hoverProvider: true, definitionProvider: true, completionProvider: {}, positionEncoding: 'utf-16', ...(mode === 'pull-diagnostics' ? { diagnosticProvider: { interFileDependencies: false, workspaceDiagnostics: false } } : {}) } } })
     } else if (message.method === 'initialized') {
       send({ id: 'settings', method: 'workspace/configuration', params: { items: [{ section: 'test' }, { section: 'missing' }] } })
       send({ id: 'edit', method: 'workspace/applyEdit', params: { edit: { changes: {} } } })
     } else if (message.method === 'textDocument/didOpen') {
       source = message.params.textDocument.text; uri = message.params.textDocument.uri
-      if (mode !== 'no-diagnostics') send({ method: 'textDocument/publishDiagnostics', params: { uri, version: 1, diagnostics: [] } })
+      if (mode === 'late-close-diagnostics') {
+        // Deliver the previous close's unversioned clear after the next subscription.
+        if (pendingCloseDiagnostics) send(pendingCloseDiagnostics)
+        pendingCloseDiagnostics = undefined
+        send({ method: 'textDocument/publishDiagnostics', params: { uri, diagnostics: source === 'clean' ? [] : [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }, severity: 1, message: source }] } })
+      } else if (mode !== 'no-diagnostics' && mode !== 'pull-diagnostics') send({ method: 'textDocument/publishDiagnostics', params: { uri, version: 1, diagnostics: [] } })
+    } else if (message.method === 'textDocument/didClose') {
+      if (mode === 'late-close-diagnostics') pendingCloseDiagnostics = { method: 'textDocument/publishDiagnostics', params: { uri: message.params.textDocument.uri, diagnostics: [] } }
+    } else if (message.method === 'textDocument/diagnostic') {
+      send({ id: message.id, result: { kind: 'full', items: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }, severity: 1, message: source }] } })
     } else if (message.method === 'textDocument/hover') {
       if (mode === 'hang') continue
       if (mode === 'crash-once' && !existsSync(trace + '.crashed')) { writeFileSync(trace + '.crashed', ''); process.exit(17) }

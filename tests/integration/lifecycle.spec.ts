@@ -36,4 +36,26 @@ describe('ServerPool', () => {
     expect(created).toBe(2)
     await pool.disposeAll()
   })
+
+  it('replaces a non-reusable session only after its running operation finishes', async () => {
+    const created: FakeSession[] = []
+    const pool = new ServerPool(async () => { const session = new FakeSession(); created.push(session); return session })
+    let entered!: () => void, finish!: () => void
+    const started = new Promise<void>(resolve => { entered = resolve })
+    const finished = new Promise<void>(resolve => { finish = resolve })
+    const first = pool.runWithRetry('ts', '/app', async session => {
+      entered()
+      await finished
+      expect(session.stops).toBe(0)
+    })
+    await started
+    const second = pool.runWithRetry('ts', '/app', async session => {
+      expect(created[0]?.stops).toBe(1)
+      expect(session).not.toBe(created[0])
+    }, undefined, () => false)
+    finish()
+    await Promise.all([first, second])
+    expect(created).toHaveLength(2)
+    await pool.disposeAll()
+  })
 })

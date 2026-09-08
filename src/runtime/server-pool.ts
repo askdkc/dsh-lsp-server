@@ -33,10 +33,13 @@ export class ServerPool<S extends PoolSession> {
     return this.serialize(keyOf(serverId, workspace), async () => task(await this.getOrCreate(serverId, workspace, signal)), signal)
   }
 
-  runWithRetry<T>(serverId: string, workspace: string, task: (session: S) => Promise<T>, signal?: AbortSignal): Promise<T> {
+  runWithRetry<T>(serverId: string, workspace: string, task: (session: S) => Promise<T>, signal?: AbortSignal, canReuse?: (session: S) => boolean): Promise<T> {
     // Keep failure eviction and the retry inside the same queue slot. A later query
     // must never enter a replacement process before the failed query finishes cleanup.
     return this.serialize(keyOf(serverId, workspace), async () => {
+      const existing = this.sessions.get(keyOf(serverId, workspace))
+      // Replacement belongs to this queue slot, after earlier work has completed.
+      if (existing?.isUsable() && canReuse && !canReuse(existing)) await this.evict(serverId, workspace)
       for (let attempt = 0; ; attempt++) {
         const session = await this.getOrCreate(serverId, workspace, signal)
         try { return await task(session) }

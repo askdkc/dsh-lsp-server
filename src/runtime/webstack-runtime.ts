@@ -180,6 +180,11 @@ export class WebstackLspRuntime {
       const open = async () => { opened = true; await connection.notify('textDocument/didOpen', { textDocument: { uri: source.uri, languageId: language, version: 1, text: source.text } }) }
       try { if (!manualOpen) await open(); return await task(session, connection, open) }
       finally { if (opened && connection.isOpen) await connection.notify('textDocument/didClose', { textDocument: { uri: source.uri } }).catch(() => {}) }
-    }, signal), signal)
+    }, signal), signal, manualOpen ? session => {
+      // Push notifications can omit document versions. A delayed didClose clear
+      // from a previous operation is indistinguishable from a fresh clean result.
+      // Use a fresh process for push diagnostics; pull responses have request IDs.
+      return !!session.capabilities.diagnosticProvider
+    } : undefined)
   }
 }

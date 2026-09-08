@@ -51,6 +51,26 @@ it('bounds a stuck initialize and does not report absent diagnostics as clean', 
   const h2 = await setup('no-diagnostics')
   await expect(h2.extra.diagnostics({workspaceRoot:h2.root,filePath:'app.ts'})).rejects.toMatchObject({name:'AbortError'})
 }, 5000)
+it('does not mistake a previous document close for fresh push diagnostics', async () => {
+  const h = await setup('late-close-diagnostics')
+  await h.lsp.query(h.request)
+  const request = { workspaceRoot: h.root, filePath: 'app.ts' }
+  expect((await h.extra.diagnostics(request)).diagnostics).toMatchObject([{ severity: 1, message: 'const value = 1' }])
+  await writeFile(join(h.root, 'app.ts'), 'const value = 2')
+  expect((await h.extra.diagnostics(request)).diagnostics).toMatchObject([{ severity: 1, message: 'const value = 2' }])
+  await writeFile(join(h.root, 'app.ts'), 'clean')
+  expect((await h.extra.diagnostics(request)).diagnostics).toEqual([])
+})
+it('reuses a pull diagnostic server and returns the current document response', async () => {
+  const h = await setup('pull-diagnostics')
+  await h.lsp.query(h.request)
+  const request = { workspaceRoot: h.root, filePath: 'app.ts' }
+  expect((await h.extra.diagnostics(request)).diagnostics).toMatchObject([{ message: 'const value = 1' }])
+  await writeFile(join(h.root, 'app.ts'), 'const value = 2')
+  expect((await h.extra.diagnostics(request)).diagnostics).toMatchObject([{ message: 'const value = 2' }])
+  const messages = (await readFile(h.trace, 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+  expect(messages.filter(message => message.method === 'initialize')).toHaveLength(1)
+})
 it('restarts once after a transport failure', async () => {
   const h = await setup('crash-once')
   expect((await h.lsp.query(h.request)).kind).toBe('hover')

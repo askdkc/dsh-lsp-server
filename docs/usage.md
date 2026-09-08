@@ -38,6 +38,8 @@ Both tools obtain the workspace from the **calling session**. Completion's line 
 
 Hover and completion can include Tailwind results. Completion ranks the typed prefix before truncating large catalogs. Diagnostics report omitted auxiliary servers; no publication before the deadline is a failure, not a clean-file result. Unsupported navigation returns `LSP_UNSUPPORTED_OPERATION`.
 
+For servers that publish diagnostics as notifications, each diagnostic query starts a fresh process if the previous process was already used. This prevents delayed notifications from an earlier document close from being mistaken for a clean result. It adds server startup and project indexing cost to repeated diagnostic queries. Servers supporting `textDocument/diagnostic` reuse their process because responses are associated with request IDs.
+
 ## Configuration
 
 Override the existing provider row in your profile's `cordis.patch.yml`, using DSH's row-id patch syntax:
