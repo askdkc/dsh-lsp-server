@@ -84,7 +84,7 @@
     "tailwindcss-v4": "npm:tailwindcss@4.1.13",
     "tsdown": "0.15.0",
     "typescript": "5.7.3",
-    "vitest": "3.2.6"
+    "vitest": "4.1.11"
   },
   "engines": {
     "node": ">=22.18.0"
