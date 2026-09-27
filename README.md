@@ -6,19 +6,21 @@ Supports PHP/Blade via **PHPantom**, TypeScript/JavaScript, Svelte, HTML, CSS, a
 
 ## Install
 
-Requires Node.js **22.18+** and DSH **0.1.3-alpha.2 or a compatible later 0.1.x release**. The required `@deepseek-ai/dsh-lsp` and `@deepseek-ai/dsh-tool-lsp` packages are installed automatically. For PHP/Blade, install **PHPantom** with `phpantom_lsp` in `PATH`. The other language servers are included.
+Requires Node.js **22.18+** and DSH **0.1.7-rc.2 or a compatible later 0.1.x release**. Compatibility is tested against **0.1.7-rc.2**; later DSH releases require their own verification. The required `@deepseek-ai/dsh-lsp` and `@deepseek-ai/dsh-tool-lsp` packages are installed automatically. For PHP/Blade, install **PHPantom** with `phpantom_lsp` in `PATH`. The other language servers are included.
 
 From npm:
 
 ```sh
-pnpm dsh plugin --profile web add @askdkc/dsh-lsp-server
+npx @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add @askdkc/dsh-lsp-server
 ```
 
 Or from GitHub:
 
 ```sh
-pnpm dsh plugin --profile web add github:askdkc/dsh-lsp-server
+npx @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add github:askdkc/dsh-lsp-server
 ```
+
+If you run DSH from a source checkout with `pnpm dsh web`, use `pnpm dsh plugin --profile web add ...` instead.
 
 [Configuration, tool usage, and troubleshooting](docs/usage.md)
 

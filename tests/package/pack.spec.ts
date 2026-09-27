@@ -18,10 +18,12 @@ it('installs the packed bundle with its LSP service and tool in a fresh DSH cons
     // dsh-lsp/dsh-tool-lsp from devDependencies: that hides missing published dependencies.
     const hostPackages = [
       '@deepseek-ai/cordis', '@deepseek-ai/schemastery',
-      '@deepseek-ai/dsh-brand', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-timeout',
+      '@deepseek-ai/dsh-agent', '@deepseek-ai/dsh-brand', '@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-timeout',
       '@deepseek-ai/dsh-fs', '@deepseek-ai/dsh-fs-local',
       '@deepseek-ai/dsh-subprocess', '@deepseek-ai/dsh-subprocess-local', '@deepseek-ai/dsh-http-proxy',
       '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-system-prompt', '@deepseek-ai/dsh-scope', '@deepseek-ai/dsh-session',
+      '@deepseek-ai/dsh-session-projection', '@deepseek-ai/dsh-sandbox', '@deepseek-ai/dsh-sandbox-policy',
+      '@deepseek-ai/dsh-ptc-runtime', '@deepseek-ai/dsh-user-approval',
     ]
     const dependencies = Object.fromEntries(await Promise.all(hostPackages.map(async name => {
       const host = JSON.parse(await readFile(join('node_modules', name, 'package.json'), 'utf8'))
@@ -35,8 +37,8 @@ it('installs the packed bundle with its LSP service and tool in a fresh DSH cons
     await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - .\nnodeLinker: hoisted\nautoInstallPeers: false\n')
     // pnpm 9 reads these settings from CLI/.npmrc; newer DSH installations
     // use pnpm versions that also read them from pnpm-workspace.yaml.
-    await exec('pnpm', [
-      'install', '--prefer-offline', '--ignore-scripts',
+    await exec('corepack', [
+      'pnpm', 'install', '--prefer-offline', '--ignore-scripts',
       '--config.node-linker=hoisted', '--config.auto-install-peers=false',
     ], { cwd: root, timeout: 90000 }).catch(error => {
       throw new Error(`Consumer install failed:\n${error.stdout}\n${error.stderr}`, { cause: error })
@@ -45,6 +47,8 @@ it('installs the packed bundle with its LSP service and tool in a fresh DSH cons
       if (typeof entry === 'object') { await access(join(packagePath, entry.types)); await access(join(packagePath, entry.default)) }
     }
     await writeFile(join(root, 'app.ts'), 'const greeting: string = "hello";\nconsole.log(greeting)')
+    await writeFile(join(root, 'index.html'), '<')
+    await writeFile(join(root, 'style.css'), 'a { col }')
     const patch = await readFile(join(packagePath, manifest.dsh.bundle.patch), 'utf8')
     const plugins = [...patch.matchAll(/name: '([^']+)'/g)].map(match => match[1])
     expect(plugins).toHaveLength(4)
@@ -64,10 +68,13 @@ it('installs the packed bundle with its LSP service and tool in a fresh DSH cons
         await ctx.plugin(Fs, {cwd: process.cwd()}); await ctx.plugin(Subprocess); await ctx.plugin(Lsp);
         await ctx.plugin(provider, { servers: {phpantom: {enabled:false}}, tailwind:{enabled:false} });
         const result = await ctx.get('lsp').query({workspaceRoot:process.cwd(),filePath:'app.ts',operation:'hover',position:{line:1,character:14}});
+        const html = await ctx.get('webstackLsp').completion({workspaceRoot:process.cwd(),filePath:'index.html',position:{line:0,character:1}});
+        const css = await ctx.get('webstackLsp').completion({workspaceRoot:process.cwd(),filePath:'style.css',position:{line:0,character:7}});
         await ctx.plugin(Prompt, {}); await ctx.plugin(Tools, {});
         await ctx.plugin(standard, {}); await ctx.plugin(extra, {});
         if (!ctx.get('tools').get('lsp') || !ctx.get('tools').get('lsp_extra')) throw new Error('missing bundled tools');
         if (extra.name !== 'lsp_extra' || result.kind !== 'hover' || !result.hover?.contents.includes('string')) throw new Error('bad packed provider');
+        if (!html.items.some(item => item.label === 'div') || !css.items.some(item => item.label === 'color')) throw new Error('packed HTML/CSS servers failed without dependency scripts');
         console.log('packed provider ok');
       } finally { await ctx.fiber.dispose(); }
     `)

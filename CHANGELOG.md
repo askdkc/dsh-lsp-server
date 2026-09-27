@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Support DSH `0.1.7-rc.2` by updating the bundled LSP packages, host peer ranges, and isolated package verification.
+
+## 0.1.3
+
 - Install the required DSH LSP service and tool automatically; require DSH `^0.1.3-alpha.2` and validate against `0.1.3-alpha.2`.
 - Connect the provider and extra tool to actual DSH services, schemas, session workspaces, and plugin disposal.
 - Implement real navigation, diagnostics, completion, document synchronization, configuration replies, timeouts, and bounded process cleanup.
