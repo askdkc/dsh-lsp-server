@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Follow DSH prerelease packages through the `next` tag and remove host release-range gates.
+- Use the same DSH launcher for plugin installation and Web startup.
+
+## 0.1.5
+
 - Support DSH `0.1.7-rc.2` by updating the bundled LSP packages, host peer ranges, and isolated package verification.
 
 ## 0.1.3

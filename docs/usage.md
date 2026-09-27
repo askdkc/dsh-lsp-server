@@ -20,20 +20,20 @@ See the [installation commands](../README.md#install).
 
 The bundle adds `lsp`, `lsp-webstack-provider`, `tool-lsp`, and `tool-lsp-extra` rows. Its `@deepseek-ai/dsh-lsp` and `@deepseek-ai/dsh-tool-lsp` dependencies are installed automatically; do not install them separately. The harness still provides the profile's `fs`, `subprocess`, `tools`, and `systemPrompt` services and the shared Cordis instance. Installing this package does not install the harness itself.
 
-The bundled DSH LSP service and tool are pinned to `0.1.7-rc.2`. Host peer ranges start at `0.1.7-rc.2` and stop before `0.2.0`. They admit later stable `0.1.x` releases, but semver excludes prereleases of a different patch version. Only `0.1.7-rc.2` is verified here; test each later DSH release before relying on it. Older DSH releases are no longer supported.
+The DSH LSP service and tool resolve from the registry's `next` tag on a fresh install. Host DSH peer declarations do not impose a release range. The repository lockfile fixes the versions used by CI; new consumer installs may resolve a newer prerelease.
 
-DSH 0.1.7-rc.2 may stop `plugin add` with `ERR_PNPM_IGNORED_BUILDS` for `core-js`, a dependency of the bundled HTML/CSS server. Decide whether to allow its build script in DSH's plugin manager. To **deny** the script from the CLI, set `allowBuilds.core-js: false` in the selected profile's `pnpm-workspace.yaml` before adding this bundle:
+DSH may stop `plugin add` with `ERR_PNPM_IGNORED_BUILDS` for `core-js`, a dependency of the bundled HTML/CSS server. Decide whether to allow its build script in DSH's plugin manager. To **deny** the script from the CLI, set `allowBuilds.core-js: false` in the selected profile's `pnpm-workspace.yaml` before adding this bundle:
 
 ```yaml
 allowBuilds:
   core-js: false
 ```
 
-The packed-artifact test runs HTML/CSS servers with dependency scripts disabled. If an earlier CLI add stopped after writing the dependency, check that `@askdkc/dsh-lsp-server` appears in `dsh.profile.bundles` in that profile's `package.json`; a dependency entry alone does not activate the bundle. If it is absent, remove the package with `dsh plugin --profile web remove @askdkc/dsh-lsp-server`, set the build decision, then repeat the original add command. Use the same launcher prefix you use for `dsh web` (for example, `npx @deepseek-ai/dsh@0.1.7-rc.2` or `pnpm dsh` from a source checkout).
+The packed-artifact test runs HTML/CSS servers with dependency scripts disabled. If an earlier CLI add stopped after writing the dependency, check that `@askdkc/dsh-lsp-server` appears in `dsh.profile.bundles` in that profile's `package.json`; a dependency entry alone does not activate the bundle. If it is absent, remove the package with `dsh plugin --profile web remove @askdkc/dsh-lsp-server`, set the build decision, then repeat the original add command. Use the same launcher prefix you use for `dsh web`.
 
 If you already enabled another LSP provider for these extensions, remove its overlapping mappings first: DSH intentionally rejects duplicate ownership with `LSP_CONFLICT`. If your profile already declares the `lsp` or `tool-lsp` rows, compose the provider and extra-tool rows manually instead of inserting the whole bundle twice.
 
-These instructions follow [DSH's profile composition and bundle dependency resolution](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.1.7-rc.2/docs/user/develop/basic/publish.md). No user profile is changed by this repository's tests or doctor command.
+These instructions follow [DSH's profile composition and bundle dependency resolution](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md). No user profile is changed by this repository's tests or doctor command.
 
 ## Tools
 
@@ -104,7 +104,7 @@ PHPANTOM_E2E=1 pnpm test:e2e # additionally tests installed PHPantom with PHP an
 
 The packed-artifact test installs the archive into a fresh consumer with DSH's hoisted layout, peer auto-installation disabled, and dependency scripts disabled. It provides the host service packages but does not preinstall either LSP package, then verifies bundle imports, both tool registrations, and real TypeScript, HTML, and CSS queries. It also checks declaration paths and the executable doctor. The consumer install prefers cached packages but needs registry access for uncached packages or metadata. E2E needs working OS file watchers; sandboxed macOS watchers may fail with `EMFILE`.
 
-Integration tests run against the published DSH `0.1.7-rc.2` service/tool packages and Cordis 4.0.4. The full Web UI and a source-built upstream application are not exercised here.
+Integration tests run against the published DSH service/tool packages and Cordis versions recorded in the lockfile. The full Web UI and a source-built upstream application are not exercised here.
 
 ### Dependency security
 
