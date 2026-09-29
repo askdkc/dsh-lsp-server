@@ -18,6 +18,14 @@ The five Node language servers and TypeScript are package dependencies. PHPantom
 
 See the [installation commands](../README.md#install).
 
+Specify `@latest` when upgrading an existing installation. A bare `plugin add @askdkc/dsh-lsp-server` can keep a locked older version and report `Already up to date`; verify the installed version in the Web profile before restarting DSH.
+
+```sh
+dsh plugin --profile web list @askdkc/dsh-lsp-server --depth 0
+```
+
+pnpm may warn about missing DSH peer packages because the profile has peer auto-installation disabled. DSH resolves those host services from its own installation; do not add duplicate host packages to the profile just to silence pnpm. A DSH compatibility warning naming this bundle and an old version means the bundle itself still needs upgrading.
+
 The bundle adds `lsp`, `lsp-webstack-provider`, `tool-lsp`, and `tool-lsp-extra` rows. Its `@deepseek-ai/dsh-lsp` and `@deepseek-ai/dsh-tool-lsp` dependencies are installed automatically; do not install them separately. The harness still provides the profile's `fs`, `subprocess`, `tools`, and `systemPrompt` services and the shared Cordis instance. Installing this package does not install the harness itself.
 
 This release pins the DSH LSP service and tool to `0.2.0-rc.1`, matching the required host DSH services. A registry `next` dependency could resolve an older prerelease from cached metadata and cause DSH to reject the installed plugin rows. The repository lockfile and packed-artifact test use the same DSH release.
@@ -93,7 +101,7 @@ The JSON config file contains the provider configuration object above. Doctor ch
 
 ## Verification
 
-Source installs build automatically through `prepare`; npm releases include the built files. `.npmrc` disables automatic peer installation during development and Git builds; development dependencies provide the host services needed by the tests.
+`pnpm pack` builds the source through `prepare` and includes the built files in the tarball; npm releases also include those files. A direct Git dependency needs to run `prepare` in the Web profile and is blocked unless that exact Git dependency is listed in the profile's `allowBuilds`. Development dependencies provide the host services needed by the tests.
 
 ```sh
 pnpm install --frozen-lockfile
