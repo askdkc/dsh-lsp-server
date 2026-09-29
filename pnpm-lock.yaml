@@ -1,7 +1,7 @@
 lockfileVersion: '9.0'
 
 settings:
-  autoInstallPeers: false
+  autoInstallPeers: true
   excludeLinksFromLockfile: false
 
 overrides:
@@ -109,10 +109,10 @@ importers:
         version: tailwindcss@4.1.13
       tsdown:
         specifier: 0.15.0
-        version: 0.15.0(typescript@5.7.3)
+        version: 0.15.0(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(typescript@5.7.3)
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@types/node@22.10.5)(jiti@2.7.0)(yaml@2.9.0)
+        version: 4.1.11(@types/node@22.10.5)(vite@6.4.3(@types/node@22.10.5)(jiti@2.7.0)(yaml@2.9.0))
 
 packages:
 
@@ -356,6 +356,15 @@ packages:
 
   '@emmetio/scanner@1.0.4':
     resolution: {integrity: sha512-IqRuJtQff7YHHBk4G8YZ45uB9BaAGcwQeVzgj/zj8/UdOhtQpEIupUhSk8dys6spFIWVZVeK20CzGEnqR5SbqA==}
+
+  '@emnapi/core@1.11.3':
+    resolution: {integrity: sha512-zLpS5asjEb7lq8jYLq37N6XKaE41DIexlY1rF/z4/tIl3wo13Sqm28fRyfIsKZD+NZ8mM5RoKkpW/rBcuoSZSg==}
+
+  '@emnapi/runtime@1.11.3':
+    resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
+
+  '@emnapi/wasi-threads@1.2.3':
+    resolution: {integrity: sha512-ELEBe8PsLvvJ6QMr0zLt8ffvOHW/dc1m3CEzNMg7aJUv3bMaoDtw2TXyDAwkYBuroxxuHEwhRTLJSe5sya547g==}
 
   '@esbuild/aix-ppc64@0.25.12':
     resolution: {integrity: sha512-Hhmwd6CInZ3dwpuGTF8fJG6yoWmsToE+vYgD4nytZVxcu1ulHpUQRAB1UJ8+N1Am3Mz4+xOByoQoSZf4D+CpkA==}
@@ -1608,6 +1617,7 @@ packages:
       '@vitest/ui': 4.1.11
       happy-dom: '*'
       jsdom: '*'
+      vite: 6.4.3
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
@@ -1954,6 +1964,22 @@ snapshots:
 
   '@emmetio/scanner@1.0.4': {}
 
+  '@emnapi/core@1.11.3':
+    dependencies:
+      '@emnapi/wasi-threads': 1.2.3
+      tslib: 2.8.1
+    optional: true
+
+  '@emnapi/runtime@1.11.3':
+    dependencies:
+      tslib: 2.8.1
+    optional: true
+
+  '@emnapi/wasi-threads@1.2.3':
+    dependencies:
+      tslib: 2.8.1
+    optional: true
+
   '@esbuild/aix-ppc64@0.25.12':
     optional: true
 
@@ -2099,8 +2125,10 @@ snapshots:
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
-  '@napi-rs/wasm-runtime@1.2.3':
+  '@napi-rs/wasm-runtime@1.2.3(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)':
     dependencies:
+      '@emnapi/core': 1.11.3
+      '@emnapi/runtime': 1.11.3
       '@tybys/wasm-util': 0.10.3
     optional: true
 
@@ -2152,9 +2180,9 @@ snapshots:
   '@rolldown/binding-openharmony-arm64@1.0.0-beta.38':
     optional: true
 
-  '@rolldown/binding-wasm32-wasi@1.0.0-beta.38':
+  '@rolldown/binding-wasm32-wasi@1.0.0-beta.38(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)':
     dependencies:
-      '@napi-rs/wasm-runtime': 1.2.3
+      '@napi-rs/wasm-runtime': 1.2.3(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
     transitivePeerDependencies:
       - '@emnapi/core'
       - '@emnapi/runtime'
@@ -2724,7 +2752,7 @@ snapshots:
 
   reusify@1.1.0: {}
 
-  rolldown-plugin-dts@0.16.12(rolldown@1.0.0-beta.38)(typescript@5.7.3):
+  rolldown-plugin-dts@0.16.12(rolldown@1.0.0-beta.38(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3))(typescript@5.7.3):
     dependencies:
       '@babel/generator': 7.29.8
       '@babel/parser': 7.29.8
@@ -2735,14 +2763,14 @@ snapshots:
       dts-resolver: 2.1.3
       get-tsconfig: 4.14.3
       magic-string: 0.30.21
-      rolldown: 1.0.0-beta.38
+      rolldown: 1.0.0-beta.38(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
     optionalDependencies:
       typescript: 5.7.3
     transitivePeerDependencies:
       - oxc-resolver
       - supports-color
 
-  rolldown@1.0.0-beta.38:
+  rolldown@1.0.0-beta.38(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3):
     dependencies:
       '@oxc-project/types': 0.89.0
       '@rolldown/pluginutils': 1.0.0-beta.38
@@ -2758,7 +2786,7 @@ snapshots:
       '@rolldown/binding-linux-x64-gnu': 1.0.0-beta.38
       '@rolldown/binding-linux-x64-musl': 1.0.0-beta.38
       '@rolldown/binding-openharmony-arm64': 1.0.0-beta.38
-      '@rolldown/binding-wasm32-wasi': 1.0.0-beta.38
+      '@rolldown/binding-wasm32-wasi': 1.0.0-beta.38(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
       '@rolldown/binding-win32-arm64-msvc': 1.0.0-beta.38
       '@rolldown/binding-win32-ia32-msvc': 1.0.0-beta.38
       '@rolldown/binding-win32-x64-msvc': 1.0.0-beta.38
@@ -2935,7 +2963,7 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  tsdown@0.15.0(typescript@5.7.3):
+  tsdown@0.15.0(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(typescript@5.7.3):
     dependencies:
       ansis: 4.3.1
       cac: 6.7.14
@@ -2944,8 +2972,8 @@ snapshots:
       diff: 8.0.4
       empathic: 2.0.1
       hookable: 5.5.3
-      rolldown: 1.0.0-beta.38
-      rolldown-plugin-dts: 0.16.12(rolldown@1.0.0-beta.38)(typescript@5.7.3)
+      rolldown: 1.0.0-beta.38(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
+      rolldown-plugin-dts: 0.16.12(rolldown@1.0.0-beta.38(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3))(typescript@5.7.3)
       semver: 7.8.5
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
@@ -3013,7 +3041,7 @@ snapshots:
       jiti: 2.7.0
       yaml: 2.9.0
 
-  vitest@4.1.11(@types/node@22.10.5)(jiti@2.7.0)(yaml@2.9.0):
+  vitest@4.1.11(@types/node@22.10.5)(vite@6.4.3(@types/node@22.10.5)(jiti@2.7.0)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.11
       '@vitest/mocker': 4.1.11(vite@6.4.3(@types/node@22.10.5)(jiti@2.7.0)(yaml@2.9.0))
@@ -3038,17 +3066,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 22.10.5
     transitivePeerDependencies:
-      - jiti
-      - less
-      - lightningcss
       - msw
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - terser
-      - tsx
-      - yaml
 
   vscode-css-languageservice@6.3.10:
     dependencies:
