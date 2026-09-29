@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- Follow DSH prerelease packages through the `next` tag and remove host release-range gates.
+- Pin the LSP service, tool, and host peers to DSH `0.2.0-rc.1` so cached `next` metadata cannot install incompatible LSP rows.
+- Require Node.js 22.19+ or 24+ to match DSH 0.2.0.
 - Use the same DSH launcher for plugin installation and Web startup.
 
 ## 0.1.5

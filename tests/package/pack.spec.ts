@@ -29,6 +29,13 @@ it('installs the packed bundle with its LSP service and tool in a fresh DSH cons
       const host = JSON.parse(await readFile(join('node_modules', name, 'package.json'), 'utf8'))
       return [name, host.version]
     })))
+    const hostVersion = dependencies['@deepseek-ai/dsh-tools']
+    for (const name of ['@deepseek-ai/dsh-lsp', '@deepseek-ai/dsh-tool-lsp']) {
+      expect(manifest.dependencies[name]).toBe(hostVersion)
+    }
+    for (const name of ['@deepseek-ai/dsh-fs', '@deepseek-ai/dsh-subprocess', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-system-prompt']) {
+      expect(manifest.peerDependencies[name]).toBe(hostVersion)
+    }
     await writeFile(join(root, 'package.json'), JSON.stringify({
       private: true, type: 'module', packageManager: manifest.packageManager,
       dependencies: { ...dependencies, [manifest.name]: `file:${join(root, archives[0]!.name)}` },

@@ -6,12 +6,12 @@ Supports PHP/Blade via **PHPantom**, TypeScript/JavaScript, Svelte, HTML, CSS, a
 
 ## Install
 
-Requires Node.js **22.18+**. The DSH LSP packages and Node language servers install with this plugin. For PHP/Blade, install **PHPantom** so `phpantom_lsp` is in `PATH`.
+Requires Node.js **22.19+ (22.x) or 24+** and DSH **0.2.0-rc.1**. The DSH LSP packages and Node language servers install with this plugin. For PHP/Blade, install **PHPantom** so `phpantom_lsp` is in `PATH`.
 
 Install from npm into the Web profile:
 
 ```sh
-dsh plugin --profile web add @askdkc/dsh-lsp-server
+dsh plugin --profile web add @askdkc/dsh-lsp-server@0.1.7
 ```
 
 Or install from GitHub:
@@ -29,7 +29,7 @@ allowBuilds:
 
 If the failed add already wrote the dependency, remove it with `dsh plugin --profile web remove @askdkc/dsh-lsp-server`, then repeat the add command using the same `dsh` launcher (for example, `pnpm dsh`). A dependency alone does not activate the plugin: confirm `@askdkc/dsh-lsp-server` appears in `dsh.profile.bundles` in the profile's `package.json`. See [installation troubleshooting](docs/usage.md#install) for details.
 
-Start or restart Web with `dsh web`.
+An older installed bundle such as `0.1.2` is skipped on DSH 0.2.0-rc.1. Upgrade it with the `plugin add` command above after 0.1.7 is published; the version exemption is not a compatibility fix. Start or restart Web with `dsh web`.
 
 [Configuration, tool usage, and troubleshooting](docs/usage.md)
 

@@ -6,7 +6,7 @@ jobs:
   verify:
     strategy:
       matrix:
-        node: ['22.18.0', '24']
+        node: ['22.19.0', '24']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

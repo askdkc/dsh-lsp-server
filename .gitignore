@@ -1,3 +1,4 @@
+AGENTS.md
 # Dependencies and generated output
 node_modules/
 .pnpm-store/
@@ -20,3 +21,4 @@ pnpm-debug.log*
 !.env.example
 
 # Keep .npmrc and pnpm-lock.yaml versioned for reproducible installs.
+.kiokuko.json

@@ -20,7 +20,7 @@ See the [installation commands](../README.md#install).
 
 The bundle adds `lsp`, `lsp-webstack-provider`, `tool-lsp`, and `tool-lsp-extra` rows. Its `@deepseek-ai/dsh-lsp` and `@deepseek-ai/dsh-tool-lsp` dependencies are installed automatically; do not install them separately. The harness still provides the profile's `fs`, `subprocess`, `tools`, and `systemPrompt` services and the shared Cordis instance. Installing this package does not install the harness itself.
 
-The DSH LSP service and tool resolve from the registry's `next` tag on a fresh install. Host DSH peer declarations do not impose a release range. The repository lockfile fixes the versions used by CI; new consumer installs may resolve a newer prerelease.
+This release pins the DSH LSP service and tool to `0.2.0-rc.1`, matching the required host DSH services. A registry `next` dependency could resolve an older prerelease from cached metadata and cause DSH to reject the installed plugin rows. The repository lockfile and packed-artifact test use the same DSH release.
 
 DSH may stop `plugin add` with `ERR_PNPM_IGNORED_BUILDS` for `core-js`, a dependency of the bundled HTML/CSS server. Decide whether to allow its build script in DSH's plugin manager. To **deny** the script from the CLI, set `allowBuilds.core-js: false` in the selected profile's `pnpm-workspace.yaml` before adding this bundle:
 
