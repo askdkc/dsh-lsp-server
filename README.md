@@ -6,7 +6,7 @@ Supports PHP/Blade via **PHPantom**, TypeScript/JavaScript, Svelte, HTML, CSS, a
 
 ## Install
 
-Requires Node.js **22.19+ (22.x) or 24+** and DSH **0.2.0-rc.1**. The DSH LSP packages and Node language servers install with this plugin. For PHP/Blade, install **PHPantom** so `phpantom_lsp` is in `PATH`.
+Requires Node.js **22.19+ (22.x) or 24+** and DSH **0.2.0-rc.2**. The DSH LSP packages and Node language servers install with this plugin. For PHP/Blade, install **PHPantom** so `phpantom_lsp` is in `PATH`.
 
 Install from npm into the Web profile:
 
@@ -25,7 +25,7 @@ allowBuilds:
 
 If the failed add already wrote the dependency, remove it with `dsh plugin --profile web remove @askdkc/dsh-lsp-server`, then repeat the add command using the same `dsh` launcher (for example, `pnpm dsh`). A dependency alone does not activate the plugin: confirm `@askdkc/dsh-lsp-server` appears in `dsh.profile.bundles` in the profile's `package.json`. See [installation troubleshooting](docs/usage.md#install) for details.
 
-An older installed bundle such as `0.1.2` is skipped on DSH 0.2.0-rc.1. The explicit `@latest` above updates an existing dependency; an unqualified `plugin add @askdkc/dsh-lsp-server` can leave its locked old version installed with `Already up to date`. The version exemption is not a compatibility fix. Start or restart Web with `dsh web`.
+Version `0.1.9` is skipped on DSH 0.2.0-rc.2 because it declares DSH `0.2.0-rc.1` host peers. After installing a compatible release, use the explicit `@latest` above to update an existing dependency; an unqualified `plugin add @askdkc/dsh-lsp-server` can leave its locked old version installed with `Already up to date`. The version exemption is not a compatibility fix. Start or restart Web with `dsh web`.
 
 [Configuration, tool usage, and troubleshooting](docs/usage.md)
 

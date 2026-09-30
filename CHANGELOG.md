@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Pin the LSP service, tool, and host peers to DSH `0.2.0-rc.1` so cached `next` metadata cannot install incompatible LSP rows.
+- Align the LSP service, tool, host peers, and development dependencies with DSH `0.2.0-rc.2` so the plugin loads on that runtime.
 - Require Node.js 22.19+ or 24+ to match DSH 0.2.0.
 - Use the same DSH launcher for plugin installation and Web startup.
 
