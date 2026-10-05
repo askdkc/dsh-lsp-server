@@ -1,11 +1,11 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdtemp, readFile, readdir, rm, writeFile, access } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile, access, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 const exec = promisify(execFile)
-it('installs the packed bundle with its LSP service and tool in a fresh DSH consumer', async () => {
+it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s admission and executes LSP queries', async hostVersion => {
   const root = await mkdtemp(join(tmpdir(), 'webstack-package-'))
   try {
     const manifest = JSON.parse(await readFile('package.json', 'utf8'))
@@ -27,18 +27,23 @@ it('installs the packed bundle with its LSP service and tool in a fresh DSH cons
     ]
     const dependencies = Object.fromEntries(await Promise.all(hostPackages.map(async name => {
       const host = JSON.parse(await readFile(join('node_modules', name, 'package.json'), 'utf8'))
-      return [name, host.version]
+      return [name, name.startsWith('@deepseek-ai/dsh-') ? hostVersion : host.version]
     })))
-    const hostVersion = dependencies['@deepseek-ai/dsh-tools']
-    for (const name of ['@deepseek-ai/dsh-lsp', '@deepseek-ai/dsh-tool-lsp']) {
-      expect(manifest.dependencies[name]).toBe(hostVersion)
-    }
-    for (const name of ['@deepseek-ai/dsh-fs', '@deepseek-ai/dsh-subprocess', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-system-prompt']) {
-      expect(manifest.peerDependencies[name]).toBe(hostVersion)
-    }
+    // Use the official preflight and its matching Cordis runtime, not a copied evaluator.
+    const alpha = hostVersion === '0.2.1-alpha.1'
+    Object.assign(dependencies, {
+      '@deepseek-ai/dsh-app-boot': hostVersion,
+      '@deepseek-ai/dsh-home-paths': hostVersion,
+      '@deepseek-ai/dsh-launch-environment': hostVersion,
+      '@deepseek-ai/cordis': alpha ? '4.0.5-alpha.1' : '4.0.4',
+      '@deepseek-ai/cordis-plugin-group': alpha ? '1.0.5-alpha.1' : '1.0.4',
+      '@deepseek-ai/cordis-plugin-loader': alpha ? '1.0.6-alpha.1' : '1.0.5',
+      '@deepseek-ai/cordis-plugin-include': alpha ? '1.0.10-alpha.1' : '1.0.9',
+    })
     await writeFile(join(root, 'package.json'), JSON.stringify({
       private: true, type: 'module', packageManager: manifest.packageManager,
       dependencies: { ...dependencies, [manifest.name]: `file:${join(root, archives[0]!.name)}` },
+      dsh: { profile: { bundles: [manifest.name] } },
     }))
     // Match DSH's profile layout and disabled peer auto-installation.
     await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - .\nnodeLinker: hoisted\nautoInstallPeers: false\n')
@@ -60,16 +65,39 @@ it('installs the packed bundle with its LSP service and tool in a fresh DSH cons
     const plugins = [...patch.matchAll(/name: '([^']+)'/g)].map(match => match[1])
     expect(plugins).toHaveLength(4)
     await writeFile(join(root, 'smoke.mjs'), `
+      import assert from 'node:assert/strict';
+      import { readFile } from 'node:fs/promises';
+      import { pathToFileURL } from 'node:url';
+      import { evaluatePluginCompatibility, loadProfileDirectory, composeEntries, prepareProfileEntries } from '@deepseek-ai/dsh-app-boot';
       import { Context } from '@deepseek-ai/cordis';
-      import Lsp from '@deepseek-ai/dsh-lsp';
-      import * as standard from '@deepseek-ai/dsh-tool-lsp';
+      import Lsp from '${manifest.name}/lsp';
+      import * as standard from '${manifest.name}/tool-lsp';
       import Tools from '@deepseek-ai/dsh-tools';
       import Prompt from '@deepseek-ai/dsh-system-prompt';
       import Fs from '@deepseek-ai/dsh-fs-local';
       import Subprocess from '@deepseek-ai/dsh-subprocess-local';
       import * as provider from '${manifest.name}/provider';
       import * as extra from '${manifest.name}/extra-tool';
-      for (const name of ${JSON.stringify(plugins)}) await import(name);
+      const manifest = JSON.parse(await readFile('${packagePath}/package.json', 'utf8'));
+      for (const version of ['0.2.0-rc.2', '0.2.1-alpha.1', '0.3.0-alpha.1', '1.0.0']) {
+        assert.equal(evaluatePluginCompatibility(manifest, {}, version), undefined);
+      }
+      const oldManifest = {...manifest, peerDependencies: {'@deepseek-ai/dsh-tools': '0.2.0-rc.2'}};
+      assert.ok(evaluatePluginCompatibility(oldManifest, {}, '0.2.1-alpha.1'));
+      const profile = loadProfileDirectory('dsh', process.cwd(), '${join(root, 'package.json')}', {userLayer:false});
+      assert.equal(profile.skippedBundles.length, 0);
+      const rows = composeEntries(profile.layers.map(layer => layer.patches));
+      assert.equal(rows.length, 4);
+      const preflightContext = new Context();
+      preflightContext.provide('profileContext', {dir: process.cwd()});
+      const prepared = prepareProfileEntries(preflightContext, rows, pathToFileURL(process.cwd() + '/').href);
+      assert.ok(prepared.every(row => !row.disabled));
+      assert.deepEqual(prepared.map(row => row.name), ${JSON.stringify(plugins)});
+      for (const row of prepared) {
+        assert.ok(row.name.startsWith('${manifest.name}/'));
+        await import(row.name);
+      }
+      await preflightContext.fiber.dispose();
       const ctx = new Context();
       try {
         await ctx.plugin(Fs, {cwd: process.cwd()}); await ctx.plugin(Subprocess); await ctx.plugin(Lsp);
@@ -78,6 +106,7 @@ it('installs the packed bundle with its LSP service and tool in a fresh DSH cons
         const html = await ctx.get('webstackLsp').completion({workspaceRoot:process.cwd(),filePath:'index.html',position:{line:0,character:1}});
         const css = await ctx.get('webstackLsp').completion({workspaceRoot:process.cwd(),filePath:'style.css',position:{line:0,character:7}});
         await ctx.plugin(Prompt, {}); await ctx.plugin(Tools, {});
+        assert.throws(() => standard.apply(ctx, {maxLocations:200, maxResultChars:32000, timeoutMs:0}), /tool-lsp: timeoutMs/);
         await ctx.plugin(standard, {}); await ctx.plugin(extra, {});
         if (!ctx.get('tools').get('lsp') || !ctx.get('tools').get('lsp_extra')) throw new Error('missing bundled tools');
         if (extra.name !== 'lsp_extra' || result.kind !== 'hover' || !result.hover?.contents.includes('string')) throw new Error('bad packed provider');
@@ -87,6 +116,16 @@ it('installs the packed bundle with its LSP service and tool in a fresh DSH cons
     `)
     const result = await exec(process.execPath, ['smoke.mjs'], { cwd: root })
     expect(result.stdout).toContain('packed provider ok')
+    // A new process cannot hide a dependency import failure behind its module cache.
+    const toolEntry = join(root, 'node_modules/@deepseek-ai/dsh-tool-lsp/lib/index.js')
+    const original = await readFile(toolEntry, 'utf8')
+    try {
+      await unlink(toolEntry)
+      await writeFile(toolEntry, "throw new Error('upstream tool import sentinel');\n" + original)
+      const failed = await exec(process.execPath, ['--input-type=module', '-e', `import '${manifest.name}/tool-lsp'`], {cwd:root}).catch(error => error)
+      expect(failed.code).toBe(1)
+      expect(failed.stderr).toContain('upstream tool import sentinel')
+    } finally { await writeFile(toolEntry, original) }
     const doctor = await exec(process.execPath, [join(packagePath, manifest.bin['dsh-lsp-webstack']), '--json'], { cwd: root }).catch(error => error)
     const report = JSON.parse(doctor.stdout)
     expect(report.servers).toHaveLength(6)

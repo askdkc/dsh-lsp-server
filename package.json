@@ -18,7 +18,15 @@
       "types": "./lib/types/extra-tool.d.ts",
       "default": "./lib/extra-tool.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./lsp": {
+      "types": "./lib/types/lsp.d.ts",
+      "default": "./lib/lsp.js"
+    },
+    "./tool-lsp": {
+      "types": "./lib/types/tool-lsp.d.ts",
+      "default": "./lib/tool-lsp.js"
+    }
   },
   "bin": {
     "dsh-lsp-webstack": "./lib/cli/doctor.js"
@@ -57,10 +65,10 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.4",
-    "@deepseek-ai/dsh-fs": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-subprocess": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-system-prompt": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-fs": "*",
+    "@deepseek-ai/dsh-subprocess": "*",
+    "@deepseek-ai/dsh-system-prompt": "*",
+    "@deepseek-ai/dsh-tools": "*",
     "@deepseek-ai/schemastery": "~3.18.4"
   },
   "devDependencies": {

@@ -18,17 +18,17 @@ The five Node language servers and TypeScript are package dependencies. PHPantom
 
 See the [installation commands](../README.md#install).
 
-Specify `@latest` when upgrading an existing installation. A bare `plugin add @askdkc/dsh-lsp-server` can keep a locked older version and report `Already up to date`; verify the installed version in the Web profile before restarting DSH.
+Run DSH commands from the DeepSeek Harness project root. After a updated npm release is published, use `@latest` to install or upgrade; an unqualified add can keep a locked older version and report `Already up to date`. A local `package.json` version change does not update npm's `latest` tag.
 
 ```sh
-dsh plugin --profile web list @askdkc/dsh-lsp-server --depth 0
+pnpm dsh plugin --profile web list @askdkc/dsh-lsp-server --depth 0
 ```
 
-pnpm may warn about missing DSH peer packages because the profile has peer auto-installation disabled. DSH resolves those host services from its own installation; do not add duplicate host packages to the profile just to silence pnpm. A DSH compatibility warning naming this bundle and an old version means the bundle itself still needs upgrading.
+pnpm may warn about missing DSH peer packages because the profile has peer auto-installation disabled. DSH resolves those host services from its own installation; do not add duplicate host packages to the profile just to silence pnpm. Older releases with exact host peers may still be skipped; install the updated release to remove that version gate.
 
 The bundle adds `lsp`, `lsp-webstack-provider`, `tool-lsp`, and `tool-lsp-extra` rows. Its `@deepseek-ai/dsh-lsp` and `@deepseek-ai/dsh-tool-lsp` dependencies are installed automatically; do not install them separately. The harness still provides the profile's `fs`, `subprocess`, `tools`, and `systemPrompt` services and the shared Cordis instance. Installing this package does not install the harness itself.
 
-This release pins the DSH LSP service, tool, and four required host services to `0.2.0-rc.2`. A registry `next` dependency could resolve an older prerelease from cached metadata and cause DSH to reject the installed plugin rows. The repository lockfile and packed-artifact test use the same DSH release.
+The four DSH host peers use `*`, including prereleases in DSH's compatibility evaluator. All four bundle rows resolve through this package's own entry points; `/lsp` and `/tool-lsp` re-export the upstream implementations without catching import or initialization errors. The LSP dependencies and development host packages remain pinned to `0.2.0-rc.2` for reproducible builds and tests; those pins do not restrict the host version at startup. Future API compatibility is not guaranteed.
 
 DSH may stop `plugin add` with `ERR_PNPM_IGNORED_BUILDS` for `core-js`, a dependency of the bundled HTML/CSS server. Decide whether to allow its build script in DSH's plugin manager. To **deny** the script from the CLI, set `allowBuilds.core-js: false` in the selected profile's `pnpm-workspace.yaml` before adding this bundle:
 
@@ -37,7 +37,14 @@ allowBuilds:
   core-js: false
 ```
 
-The packed-artifact test runs HTML/CSS servers with dependency scripts disabled. If an earlier CLI add stopped after writing the dependency, check that `@askdkc/dsh-lsp-server` appears in `dsh.profile.bundles` in that profile's `package.json`; a dependency entry alone does not activate the bundle. If it is absent, remove the package with `dsh plugin --profile web remove @askdkc/dsh-lsp-server`, set the build decision, then repeat the original add command. Use the same launcher prefix you use for `dsh web`.
+The packed-artifact test runs HTML/CSS servers with dependency scripts disabled. If an earlier add stopped after writing the dependency, check that `@askdkc/dsh-lsp-server` appears in `dsh.profile.bundles` in that profile's `package.json`; a dependency entry alone does not activate the bundle. If it is absent, remove the package, set the build decision, then add it again:
+
+```sh
+pnpm dsh plugin --profile web remove @askdkc/dsh-lsp-server
+pnpm dsh plugin --profile web add @askdkc/dsh-lsp-server@latest
+```
+
+Run both commands from the DeepSeek Harness project root, after a updated npm release is available.
 
 If you already enabled another LSP provider for these extensions, remove its overlapping mappings first: DSH intentionally rejects duplicate ownership with `LSP_CONFLICT`. If your profile already declares the `lsp` or `tool-lsp` rows, compose the provider and extra-tool rows manually instead of inserting the whole bundle twice.
 
@@ -92,17 +99,21 @@ Bundled mode resolves executables on the Node host and is intended for local DSH
 
 ## Doctor
 
+Run from this repository's root after installing dependencies and building:
+
 ```sh
+pnpm install --frozen-lockfile
+pnpm build
 node lib/cli/doctor.js --json
-node lib/cli/doctor.js --config ./webstack-config.json --deep
 ```
 
-The JSON config file contains the provider configuration object above. Doctor checks package binaries and PATH availability without launching servers, and exits nonzero when an enabled server is missing. `--deep` adds an explicit read-only inspection summary; it is **not** a protocol handshake or a check of the running DSH profile. Runtime status is available through `lsp_extra`.
+Doctor checks package binaries and PATH availability without launching servers, and exits nonzero when an enabled server is missing. To inspect an existing JSON config, pass its path with `--config`; `--deep` adds a read-only summary, not a protocol handshake or check of the running DSH profile. Runtime status is available through `lsp_extra`.
 
 ## Verification
 
-`pnpm pack` builds the source through `prepare` and includes the built files in the tarball; npm releases also include those files. A direct Git dependency needs to run `prepare` in the Web profile and is blocked unless that exact Git dependency is listed in the profile's `allowBuilds`. Development dependencies provide the host services needed by the tests.
+From this repository root, `pnpm pack` builds the source through `prepare` and includes the built files in the tarball; npm releases also include those files. A direct Git dependency needs to run `prepare` in the Web profile and is blocked unless that exact Git dependency is listed in the profile's `allowBuilds`. Development dependencies provide the host services needed by the tests.
 
+Run these from this repository's root:
 ```sh
 pnpm install --frozen-lockfile
 pnpm check                 # types, deterministic/DSH integration tests, build, packed-artifact smoke test
@@ -110,13 +121,13 @@ pnpm test:e2e              # real TS/JS, HTML, CSS, Svelte, Tailwind v3/v4
 PHPANTOM_E2E=1 pnpm test:e2e # additionally tests installed PHPantom with PHP and Blade
 ```
 
-The packed-artifact test installs the archive into a fresh consumer with DSH's hoisted layout, peer auto-installation disabled, and dependency scripts disabled. It provides the host service packages but does not preinstall either LSP package, then verifies bundle imports, both tool registrations, and real TypeScript, HTML, and CSS queries. It also checks declaration paths and the executable doctor. The consumer install prefers cached packages but needs registry access for uncached packages or metadata. E2E needs working OS file watchers; sandboxed macOS watchers may fail with `EMFILE`.
+The packed-artifact test installs the archive into a fresh consumer with DSH's hoisted layout, peer auto-installation disabled, and dependency scripts disabled. It provides the host service packages but does not preinstall either LSP package, then verifies official profile composition and preflight, bundle imports, both tool registrations, and real TypeScript, HTML, and CSS queries on DSH `0.2.0-rc.2` and `0.2.1-alpha.1`. It also checks that import and initialization errors retain their original cause. It also checks declaration paths and the executable doctor. The consumer install prefers cached packages but needs registry access for uncached packages or metadata. E2E needs working OS file watchers; sandboxed macOS watchers may fail with `EMFILE`.
 
-Integration tests run against the published DSH service/tool packages and Cordis versions recorded in the lockfile. The full Web UI and a source-built upstream application are not exercised here.
+Integration tests run against the published DSH service/tool packages and Cordis versions recorded in the lockfile. The packed consumers use the published DSH runtimes named above. Future versions (`0.3.0-alpha.1` and `1.0.0`) are simulated only as version inputs to the official compatibility evaluator, not tested APIs. The full Web UI and a source-built upstream application are not exercised here.
 
 ### Dependency security
 
-This repository pins Vite to 6.4.3 (which uses patched esbuild 0.25.x) and overrides the Svelte Language Server's fallback compiler to Svelte 5.55.7. These versions address [Vite's Windows path bypass](https://github.com/advisories/GHSA-fx2h-pf6j-xcff) and the [Svelte SSR](https://github.com/advisories/GHSA-pr6f-5x2q-rwfp) / [DOM clobbering](https://github.com/advisories/GHSA-rcqx-6q8c-2c42) advisories. Run `pnpm audit` after dependency updates. The Svelte E2E tests exercise fallback compilation with both legacy and rune syntax, including diagnostics after edits.
+This repository pins Vite to 6.4.3 (which uses patched esbuild 0.25.x) and overrides the Svelte Language Server's fallback compiler to Svelte 5.55.7. These versions address [Vite's Windows path bypass](https://github.com/advisories/GHSA-fx2h-pf6j-xcff) and the [Svelte SSR](https://github.com/advisories/GHSA-pr6f-5x2q-rwfp) / [DOM clobbering](https://github.com/advisories/GHSA-rcqx-6q8c-2c42) advisories. Run `pnpm audit` from this repository root after dependency updates. The Svelte E2E tests exercise fallback compilation with both legacy and rune syntax, including diagnostics after edits.
 
 The pinned `svelte-language-server` still declares Svelte 4 as its dependency. Repository overrides and `pnpm-lock.yaml` do **not** propagate when this plugin is installed as a dependency. Until upstream changes that dependency, the host installation must apply its own override to obtain the patched fallback compiler. For npm, merge this into the installation root's `package.json`, reinstall, and run `npm audit`:
 

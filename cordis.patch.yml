@@ -1,6 +1,6 @@
 - insert:
     - id: lsp
-      name: '@deepseek-ai/dsh-lsp'
+      name: '@askdkc/dsh-lsp-server/lsp'
 
     - id: lsp-webstack-provider
       name: '@askdkc/dsh-lsp-server/provider'
@@ -14,7 +14,7 @@
             args: ['--stdio']
 
     - id: tool-lsp
-      name: '@deepseek-ai/dsh-tool-lsp'
+      name: '@askdkc/dsh-lsp-server/tool-lsp'
       config:
         maxLocations: 200
         maxResultChars: 32000
