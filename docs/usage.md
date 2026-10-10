@@ -64,6 +64,8 @@ Additional tool calls:
 
 Both tools obtain the workspace from the **calling session**. Completion's line and character are **one-based UTF-16**; diagnostic/output ranges are **zero-based UTF-16**. The model cannot supply a different workspace root. The underlying service API uses zero-based positions.
 
+Diagnostics on existing unsupported documents such as `PLAN.md` return `{"diagnostics":[],"skipped":{"reason":"unsupported_file_type","filePath":"PLAN.md"}}`. This means no static check was performed; use document content and structure checks instead. Missing files, workspace escapes, read-limit failures, and failures from a supported primary server remain errors. `status.supportedFileSuffixes` describes routing support, while `servers` separately describes enabled/available servers.
+
 Hover and completion can include Tailwind results. Completion ranks the typed prefix before truncating large catalogs. Diagnostics report omitted auxiliary servers; no publication before the deadline is a failure, not a clean-file result. Unsupported navigation returns `LSP_UNSUPPORTED_OPERATION`.
 
 For servers that publish diagnostics as notifications, each diagnostic query starts a fresh process if the previous process was already used. This prevents delayed notifications from an earlier document close from being mistaken for a clean result. It adds server startup and project indexing cost to repeated diagnostic queries. Servers supporting `textDocument/diagnostic` reuse their process because responses are associated with request IDs.

@@ -2,6 +2,8 @@
 
 A read-only LSP plugin for DeepSeek Harness. It provides code navigation, diagnostics, and completion for PHP/Blade, TypeScript/JavaScript, Svelte, HTML, CSS, and Tailwind.
 
+Markdown and other unsupported documents return an explicit `skipped` diagnostic result, not a tool error or a clean-file claim. `lsp_extra status` reports routing suffixes and server availability. See [diagnostic behavior](docs/usage.md#tools).
+
 ## Requirements
 
 - Node.js 22.19+ (22.x) or 24+

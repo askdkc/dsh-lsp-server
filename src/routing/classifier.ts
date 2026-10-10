@@ -37,3 +37,8 @@ export function classifyFile(filePath: string, bladeSuffixes: string[] = ['.blad
   if (!match) return undefined
   return { path: normalizedPath, basename, suffix: match.suffix, kind: match.kind }
 }
+
+/** Return the supported suffixes, including configured Blade suffixes. */
+export function supportedFileSuffixes(bladeSuffixes: string[] = ['.blade.php']): string[] {
+  return [...new Set([...bladeSuffixes.map(suffix => suffix.toLowerCase()), ...CLASSIFIERS.map(item => item.suffix)])]
+}

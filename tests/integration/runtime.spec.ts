@@ -91,3 +91,17 @@ it('rejects strict startup when an enabled executable is missing', async () => {
     tailwind: { enabled: false },
   })).rejects.toThrow('unavailable language servers: typescript')
 })
+
+it('skips unsupported document diagnostics without starting a server or claiming a clean result', async () => {
+  const h = await setup()
+  await writeFile(join(h.root, 'PLAN.md'), '# Plan\n')
+  expect(await h.extra.diagnostics({ workspaceRoot: h.root, filePath: 'PLAN.md' })).toEqual({
+    diagnostics: [], skipped: { reason: 'unsupported_file_type', filePath: 'PLAN.md' },
+  })
+  await expect(readFile(h.trace, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+  await expect(h.extra.diagnostics({ workspaceRoot: h.root, filePath: 'missing.md' })).rejects.toThrow('regular file')
+  await symlink(fixture, join(h.root, 'outside.md'))
+  await expect(h.extra.diagnostics({ workspaceRoot: h.root, filePath: 'outside.md' })).rejects.toThrow('outside workspace')
+  expect((await h.extra.status()).supportedFileSuffixes).toContain('.ts')
+  expect((await h.extra.status()).supportedFileSuffixes).not.toContain('.md')
+})

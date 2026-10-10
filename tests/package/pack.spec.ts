@@ -59,6 +59,7 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
       if (typeof entry === 'object') { await access(join(packagePath, entry.types)); await access(join(packagePath, entry.default)) }
     }
     await writeFile(join(root, 'app.ts'), 'const greeting: string = "hello";\nconsole.log(greeting)')
+    await writeFile(join(root, 'PLAN.md'), '# Plan\n')
     await writeFile(join(root, 'index.html'), '<')
     await writeFile(join(root, 'style.css'), 'a { col }')
     const patch = await readFile(join(packagePath, manifest.dsh.bundle.patch), 'utf8')
@@ -109,6 +110,12 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
         assert.throws(() => standard.apply(ctx, {maxLocations:200, maxResultChars:32000, timeoutMs:0}), /tool-lsp: timeoutMs/);
         await ctx.plugin(standard, {}); await ctx.plugin(extra, {});
         if (!ctx.get('tools').get('lsp') || !ctx.get('tools').get('lsp_extra')) throw new Error('missing bundled tools');
+        const guidance = (await ctx.get('systemPrompt').assemble()).sections.find(section => section.name === 'tool:lsp_extra').text;
+        assert.ok(guidance.includes('after editing supported code files'));
+        assert.ok(guidance.includes('For Markdown and other unsupported documents'));
+        const skipped = await ctx.get('tools').execute({callId:'packed-md',name:'lsp_extra',arguments:{operation:'diagnostics',file_path:'PLAN.md',severity:'all'},signal:new AbortController().signal,agent:{session:{header:{cwd:process.cwd()}}}});
+        assert.equal(skipped.isError, false);
+        assert.ok(JSON.stringify(skipped).includes('unsupported_file_type'));
         if (extra.name !== 'lsp_extra' || result.kind !== 'hover' || !result.hover?.contents.includes('string')) throw new Error('bad packed provider');
         if (!html.items.some(item => item.label === 'div') || !css.items.some(item => item.label === 'color')) throw new Error('packed HTML/CSS servers failed without dependency scripts');
         console.log('packed provider ok');

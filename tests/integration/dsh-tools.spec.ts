@@ -12,6 +12,7 @@ import { harness } from '../fixtures/harness.js'
 
 it('registers both tools in real DSH and enforces session workspace and schemas', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-tools-'))
+  await writeFile(join(root, 'PLAN.md'), '# Plan\n')
   await writeFile(join(root, 'app.ts'), 'const value: string = "hello";\nconsole.log(value);')
   const h = await harness(root)
   try {
@@ -21,6 +22,10 @@ it('registers both tools in real DSH and enforces session workspace and schemas'
     const extraPlugin = h.ctx.plugin(extra, {})
     await extraPlugin
     const tools = h.ctx.get('tools')!
+    const guidance = (await h.ctx.get('systemPrompt')!.assemble()).sections.find(section => section.name === 'tool:lsp_extra')!.text
+    expect(guidance).toContain('after editing supported code files')
+    expect(guidance).toContain('For Markdown and other unsupported documents')
+    expect(guidance).toContain('A skipped query is unverified, never a clean result')
     expect(tools.get('lsp')).toBeDefined()
     expect(tools.get('lsp_extra')?.parameters).toMatchObject({ type: 'object' })
     const call = (name: string, args: unknown, withAgent = true) => tools.execute({
@@ -33,6 +38,9 @@ it('registers both tools in real DSH and enforces session workspace and schemas'
     expect(JSON.stringify(hover)).toContain('string')
     const status = await call('lsp_extra', { operation: 'status' }, false)
     expect(status).toMatchObject({ isError: false })
+    const skipped = await call('lsp_extra', { operation: 'diagnostics', file_path: 'PLAN.md', severity: 'all' })
+    expect(skipped).toMatchObject({ isError: false })
+    expect(JSON.stringify(skipped)).toContain('unsupported_file_type')
     const missing = await call('lsp_extra', { operation: 'completion', file_path: 'app.ts', line: 1, character: 1 }, false)
     expect(JSON.stringify(missing)).toContain('LSP_WORKSPACE_REQUIRED')
     const invalid = await call('lsp_extra', { operation: 'completion', file_path: 'app.ts', line: 0, character: 1 })

@@ -19,11 +19,14 @@ export interface NormalizedDiagnostic {
   servers?: string[]
 }
 export interface NormalizedCompletionItem { server: string; label: string; kind?: number; detail?: string; documentation?: string; sortText?: string; filterText?: string; insertText?: string; insertTextFormat?: number; deprecated?: boolean }
-export interface DiagnosticsResult { diagnostics: NormalizedDiagnostic[]; omittedServers?: string[]; truncated?: { diagnostics: number; characters: number } }
+/** A skipped diagnostic query is unverified; an empty diagnostics array alone is not evidence of a clean file. */
+export interface DiagnosticsResult { skipped?: { reason: 'unsupported_file_type'; filePath: string }; diagnostics: NormalizedDiagnostic[]; omittedServers?: string[]; truncated?: { diagnostics: number; characters: number } }
 export interface CompletionResult { items: NormalizedCompletionItem[]; truncated?: { items: number; characters: number } }
 
 export interface WebstackLspStatus {
   providerId: string
+  /** Routing suffixes; enabled/available servers are reported separately. */
+  supportedFileSuffixes?: string[]
   servers: Array<{ id: import('./config.js').ServerId; enabled: boolean; available: boolean; source: 'bundled' | 'path'; command?: string; version?: string; lastError?: string; liveWorkspaces: number; restarts: number }>
 }
 

@@ -3,7 +3,7 @@ import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { ResolvedConfig, ServerId } from '../config.js'
 import { SERVER_IDS } from '../config.js'
 import { readSource, type HostFileSystem, type HostSource } from '../host/dsh.js'
-import { classifyFile } from '../routing/classifier.js'
+import { classifyFile, supportedFileSuffixes } from '../routing/classifier.js'
 import { routeFor, type Route } from '../routing/route-table.js'
 import { hasTailwindCandidate } from '../routing/tailwind-candidate.js'
 import { resolveLaunch, initializationOptions, serverConfiguration } from '../servers/launch.js'
@@ -109,6 +109,11 @@ export class WebstackLspRuntime {
 
   async diagnostics(request: DiagnosticsRequest, signal?: AbortSignal): Promise<DiagnosticsResult> {
     const deadline = this.signal(this.config.timeouts.diagnosticsMs, signal)
+    if (!classifyFile(request.filePath, this.config.routing.bladeSuffixes)) {
+      // Validate workspace containment, existence and read limits even for unsupported files.
+      await readSource(this.fs, request.workspaceRoot, request.filePath, this.config.limits.maxDocumentBytes, deadline)
+      return { diagnostics: [], skipped: { reason: 'unsupported_file_type', filePath: request.filePath } }
+    }
     const [source, route] = await this.prepare(request, deadline)
     const selected = [route.primary, ...(route.auxiliary && this.config.tailwind.enabled ? [route.auxiliary] : [])].filter(item => this.config.servers[item.server].enabled && (!request.servers || request.servers.includes(item.server)))
     if (!selected.length) throw new WebstackLspError('LSP_UNAVAILABLE', 'no selected diagnostic server supports this file')
@@ -143,7 +148,7 @@ export class WebstackLspRuntime {
   }
 
   async status(): Promise<WebstackLspStatus> {
-    return { providerId: this.config.providerId, servers: await Promise.all(SERVER_IDS.map(async id => {
+    return { providerId: this.config.providerId, supportedFileSuffixes: supportedFileSuffixes(this.config.routing.bladeSuffixes), servers: await Promise.all(SERVER_IDS.map(async id => {
       const config = this.config.servers[id]
       let available = false
       try {

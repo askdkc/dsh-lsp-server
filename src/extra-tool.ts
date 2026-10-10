@@ -17,7 +17,7 @@ export function createExtraTool(service: WebstackLspService, config: Config = {}
   for (const [key, value] of Object.entries(limits)) if (!Number.isSafeInteger(value) || value < 1 || value > 2147483647) throw new TypeError(`${key} must be a positive integer no greater than 2147483647`)
   return defineTool({
     name,
-    description: 'Read language-server status, diagnostics, or completion candidates. file_path is workspace-relative. Completion line and character are one-based UTF-16. No edits are applied.',
+    description: 'Read language-server status, diagnostics, or completion candidates for PHP/Blade, TypeScript/JavaScript, JSX/TSX, Svelte, HTML and CSS/PCSS. status reports supportedFileSuffixes and server availability. Unsupported document diagnostics return skipped (unverified). file_path is workspace-relative. Completion line and character are one-based UTF-16. No edits are applied.',
     parameters: {
       operation: { type: 'string', enum: ['status', 'diagnostics', 'completion'], required: true },
       file_path: { type: 'string' }, line: { type: 'integer' }, character: { type: 'integer' },
@@ -59,5 +59,5 @@ export function createExtraTool(service: WebstackLspService, config: Config = {}
 export function apply(ctx: Context, config: Config = {}): void {
   const tool = createExtraTool(ctx.webstackLsp, config)
   ctx.tools.register(tool)
-  ctx.systemPrompt.section({ name: 'tool:lsp_extra', order: 500, text: 'Use lsp_extra diagnostics after edits to inspect static errors. Use completion for exact symbol or framework candidates. Completion cursors are one-based UTF-16; output ranges are zero-based. The tool never applies edits.' })
+  ctx.systemPrompt.section({ name: 'tool:lsp_extra', order: 500, text: 'Use lsp_extra diagnostics after editing supported code files (PHP/Blade, TypeScript/JavaScript, JSX/TSX, Svelte, HTML, CSS/PCSS). Check status for supportedFileSuffixes and server availability when uncertain. For Markdown and other unsupported documents, use content/structure checks instead. A skipped query is unverified, never a clean result; do not repeat an unsupported query unchanged. Use completion for exact symbol or framework candidates. Completion cursors are one-based UTF-16; output ranges are zero-based. The tool never applies edits.' })
 }
