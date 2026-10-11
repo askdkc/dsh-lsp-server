@@ -122,7 +122,9 @@
     "overrides": {
       "tsdown>rolldown": "1.0.0-beta.38",
       "svelte-language-server>svelte": "5.55.7",
-      "vite": "6.4.3"
+      "vite": "6.4.3",
+      "source-map-js": "1.2.2",
+      "postcss-selector-parser": "7.1.6"
     }
   },
   "license": "MIT",
