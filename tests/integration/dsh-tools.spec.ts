@@ -28,16 +28,20 @@ it('registers both tools in real DSH and enforces session workspace and schemas'
     expect(guidance).toContain('A skipped query is unverified, never a clean result')
     expect(tools.get('lsp')).toBeDefined()
     expect(tools.get('lsp_extra')?.parameters).toMatchObject({ type: 'object' })
+    expect((tools.get('lsp_extra')?.parameters as any).properties.operation.enum).toEqual(expect.arrayContaining(['snapshot', 'structure', 'semantic']))
     const call = (name: string, args: unknown, withAgent = true) => tools.execute({
       callId: ToolCallId('test'), name, arguments: args, signal: new AbortController().signal,
       // The tool only reads the session cwd; no model or network is involved.
-      ...(withAgent ? { agent: { session: { header: { cwd: root } } } as NonNullable<ToolExecutionInput['agent']> } : {}),
+      ...(withAgent ? { agent: { id: 'fixture-agent', session: { id: 'fixture-session', header: { cwd: root } } } as NonNullable<ToolExecutionInput['agent']> } : {}),
     })
     const hover = await call('lsp', { operation: 'hover', file_path: 'app.ts', line: 2, character: 14 })
     expect(hover).toMatchObject({ isError: false })
     expect(JSON.stringify(hover)).toContain('string')
     const status = await call('lsp_extra', { operation: 'status' }, false)
     expect(status).toMatchObject({ isError: false })
+    const snapshot = await call('lsp_extra', { operation: 'snapshot', action: 'open', file_path: 'app.ts' })
+    expect(snapshot).toMatchObject({ isError: false })
+    expect(JSON.stringify(snapshot)).toContain('"language":"typescript"')
     const skipped = await call('lsp_extra', { operation: 'diagnostics', file_path: 'PLAN.md', severity: 'all' })
     expect(skipped).toMatchObject({ isError: false })
     expect(JSON.stringify(skipped)).toContain('unsupported_file_type')

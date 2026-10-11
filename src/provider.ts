@@ -4,6 +4,8 @@ import type { LspProvider, LspProviderQuery, LspQueryResult } from '@deepseek-ai
 import type { Config as PluginConfig, ResolvedConfig } from './config.js'
 import { resolveConfig } from './config.js'
 import type { WebstackLspService } from './service.js'
+import type { CodeIntelligenceServiceV1 } from './code-intelligence-contracts.js'
+import type { CodeIntelligenceToolServiceV1 } from './structure/types.js'
 import { createWebstackLspService } from './service.js'
 import { WebstackLspRuntime } from './runtime/webstack-runtime.js'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -15,7 +17,7 @@ export const name = 'lsp-webstack-provider'
 export const inject = ['fs', 'lsp', 'subprocess']
 
 declare module '@deepseek-ai/cordis' {
-  interface Context { webstackLsp: WebstackLspService }
+  interface Context { webstackLsp: WebstackLspService; codeIntelligence: CodeIntelligenceServiceV1; codeIntelligenceRuntime: CodeIntelligenceToolServiceV1 }
 }
 
 export const OUTER_EXTENSION_MAP = {
@@ -44,5 +46,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     }
     yield ctx.lsp.registerProvider(createCompositeProvider(runtime, resolved))
     yield ctx.provide('webstackLsp', createWebstackLspService(runtime))
+    yield ctx.provide('codeIntelligence', runtime.codeIntelligence)
+    yield ctx.provide('codeIntelligenceRuntime', runtime.codeIntelligenceRuntime)
   }, 'webstack LSP provider')
 }

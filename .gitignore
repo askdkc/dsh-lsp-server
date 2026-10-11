@@ -22,3 +22,4 @@ pnpm-debug.log*
 
 # Keep .npmrc and pnpm-lock.yaml versioned for reproducible installs.
 .kiokuko.json
+.agenticreplay/

@@ -9,7 +9,7 @@ describe('DSH composition contract', () => {
     expect((patch.match(/id: lsp-webstack-provider/g) ?? []).length).toBe(1)
     expect((patch.match(/id: tool-lsp-extra/g) ?? []).length).toBe(1)
     expect(providerInject).toEqual(['fs', 'lsp', 'subprocess'])
-    expect(toolInject).toEqual(['tools', 'systemPrompt', 'webstackLsp'])
+    expect(toolInject).toEqual(['tools', 'systemPrompt', 'webstackLsp', 'codeIntelligenceRuntime'])
     expect(toolName).toBe('lsp_extra')
   })
 

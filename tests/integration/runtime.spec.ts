@@ -30,6 +30,61 @@ it('uses path command/env/configuration, rejects applyEdit and syncs fresh text'
   await h.plugin.dispose()
   expect((await readFile(h.trace, 'utf8'))).toContain('shutdown')
 })
+
+it('serves structure and semantic queries from an owner-bound, versioned snapshot', async () => {
+  const h = await setup()
+  const code = (h.ctx as any).get('codeIntelligenceRuntime')
+  expect(code).toBeDefined()
+  const scope = { ownerId: 'agent-a', sessionId: 'session-a', workspaceRoot: h.root }
+  const snapshot = await code.snapshot.open(scope, 'app.ts')
+  expect(snapshot).toMatchObject({ status: 'ok', version: 1, language: 'typescript', sourceKind: 'disk' })
+
+  const outline = await code.structure.outline(scope, snapshot.handle, { limit: 10 })
+  expect(outline.declarations).toMatchObject([{ kind: 'variable', name: 'value', range: { start: { line: 0, character: 6 } } }])
+  expect(outline.truncated).toBe(false)
+
+  const semantic = await code.semantic.query(scope, snapshot.handle, { operation: 'hover', position: { line: 0, character: 6 } })
+  expect(semantic).toMatchObject({ status: 'ok', operation: 'hover' })
+  expect(JSON.stringify(semantic)).toContain('const value = 1')
+
+  await writeFile(join(h.root, 'app.ts'), 'const value = 2')
+  await expect(code.structure.outline(scope, snapshot.handle, { limit: 10 })).rejects.toMatchObject({ code: 'LSP_STALE_SNAPSHOT' })
+  await expect(code.structure.outline({ ...scope, ownerId: 'agent-b' }, snapshot.handle, { limit: 10 })).rejects.toMatchObject({ code: 'LSP_STALE_SNAPSHOT' })
+  await code.snapshot.release(scope, snapshot.handle)
+  await h.dispose()
+})
+
+it('binds the V1 code contract to the caller scope and returns only bounded protocol DTOs', async () => {
+  const h = await setup()
+  const service = (h.ctx as any).get('codeIntelligence')
+  const signal = new AbortController().signal
+  const binding = {
+    owner: { agentId: 'agent-a', sessionId: 'session-a' },
+    workspaceRoot: h.root,
+    scope: {},
+    context: { get: (name: string) => (h.ctx as any).get(name, false) },
+    assertCurrent() {},
+  }
+  const lease = await service.bind(binding, signal)
+  try {
+    const capabilities = await lease.request({ method: 'capabilities' }, signal)
+    expect(capabilities).toMatchObject({
+      protocol: 'code-intelligence/v1', status: 'ok', sourceKind: 'disk', freshness: 'unknown',
+      data: { version: 1, capabilities: ['snapshots', 'structure', 'semantic'], queryIds: ['declarations', 'calls', 'imports'] },
+    })
+
+    const opened = await lease.request({ method: 'snapshot.open', path: 'app.ts' }, signal)
+    expect(opened).toMatchObject({ protocol: 'code-intelligence/v1', status: 'ok', freshness: 'pinned', data: { path: 'app.ts', language: 'typescript', parseErrors: false } })
+    const handle = (opened.data as any).handle as string
+    const outline = await lease.request({ method: 'structure.outline', handle, limit: 10 }, signal)
+    expect(outline).toMatchObject({ status: 'ok', freshness: 'current', data: { items: [{ kind: 'variable', name: 'value' }] } })
+    const nodeHandle = ((outline.data as any).items[0]).handle as string
+    const span = await lease.request({ method: 'structure.span', nodeHandle }, signal)
+    expect(span).toMatchObject({ status: 'ok', data: { text: 'value = 1' } })
+    expect(await lease.request({ method: 'snapshot.release', handle }, signal)).toMatchObject({ status: 'ok', data: { released: true } })
+  } finally { await lease.dispose(); await h.dispose() }
+})
+
 it('cancels queued work promptly and terminates a server ignoring cancellation', async () => {
   const h = await setup('hang')
   const runningAbort = new AbortController()

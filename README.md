@@ -4,6 +4,14 @@ A read-only LSP plugin for DeepSeek Harness. It provides code navigation, diagno
 
 Markdown and other unsupported documents return an explicit `skipped` diagnostic result, not a tool error or a clean-file claim. `lsp_extra status` reports routing suffixes and server availability. See [diagnostic behavior](docs/usage.md#tools).
 
+## Read-only code structure
+
+The provider also bundles Tree-sitter WASM grammars for JavaScript, TypeScript, and TSX. Through `lsp_extra`, open a workspace-relative snapshot, use its opaque handle with `structure` (`outline`, `enclosing`, `query`, or bounded `span`) or `semantic` operations, then release the snapshot. Structure and semantic positions use zero-based UTF-16 coordinates; completion keeps its existing one-based coordinates. Only registered query IDs (`declarations`, `calls`, `imports`) are accepted. No edits or arbitrary Tree-sitter queries are exposed.
+
+For example, inspect parser availability, open `src/index.ts` with `operation: "snapshot", action: "open", file_path: "src/index.ts"`, pass the returned handle to `operation: "structure", action: "outline"`, and release it with `operation: "snapshot", action: "release"`. Snapshot documents are capped at 2 MiB; outline/query results, source spans, responses, and evaluation budgets are bounded. Unsupported languages or unavailable semantic servers are reported explicitly rather than treated as empty successful results. Tree-sitter cache entries are bounded and released with their snapshots or worker lifetime.
+
+The bundled structural grammar set is currently limited to JavaScript, TypeScript, and TSX. PHP, Blade, Svelte, HTML, CSS, and Rust structural grammars and mixed-language injections are not included yet; their existing LSP routing does not imply structural-parser support.
+
 ## Requirements
 
 - Node.js 22.19+ (22.x) or 24+

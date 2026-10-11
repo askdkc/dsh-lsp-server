@@ -8,6 +8,14 @@ export type WebstackErrorCode =
   | 'LSP_CONFLICT'
   | 'LSP_WORKSPACE_REQUIRED'
   | 'LSP_WEBSTACK_CONFIG_INVALID'
+  | 'LSP_STALE_SNAPSHOT'
+  | 'LSP_SNAPSHOT_LIMIT'
+  | 'LSP_STRUCTURE_BUSY'
+  | 'LSP_STRUCTURE_TIMEOUT'
+  | 'LSP_STRUCTURE_LIMIT'
+  | 'LSP_STRUCTURE_UNAVAILABLE'
+  | 'LSP_STRUCTURE_UNSUPPORTED'
+  | 'LSP_CODE_INTELLIGENCE_UNAVAILABLE'
 
 export class WebstackLspError extends LspError {
   declare readonly code: WebstackErrorCode

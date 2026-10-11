@@ -19,6 +19,9 @@ export interface NormalizedDiagnostic {
   servers?: string[]
 }
 export interface NormalizedCompletionItem { server: string; label: string; kind?: number; detail?: string; documentation?: string; sortText?: string; filterText?: string; insertText?: string; insertTextFormat?: number; deprecated?: boolean }
+export type NavigationResult =
+  | { kind: 'locations'; locations: ReadonlyArray<{ uri: string; range: LspRange }>; resolvedWorkspaceUri: string; truncated?: boolean; omitted?: number }
+  | { kind: 'hover'; hover: { contents: string; range?: LspRange } | null }
 /** A skipped diagnostic query is unverified; an empty diagnostics array alone is not evidence of a clean file. */
 export interface DiagnosticsResult { skipped?: { reason: 'unsupported_file_type'; filePath: string }; diagnostics: NormalizedDiagnostic[]; omittedServers?: string[]; truncated?: { diagnostics: number; characters: number } }
 export interface CompletionResult { items: NormalizedCompletionItem[]; truncated?: { items: number; characters: number } }

@@ -1,0 +1,40 @@
+{
+  "runtime": {
+    "package": "web-tree-sitter",
+    "version": "0.27.1",
+    "sourceCommit": "10eb5ac119eec9cb4267a8e035066473983f5f3a",
+    "license": "MIT"
+  },
+  "grammars": [
+    {
+      "language": "javascript",
+      "package": "tree-sitter-javascript",
+      "version": "0.25.0",
+      "sourceCommit": "44c892e0be055ac465d5eeddae6d3e194424e7de",
+      "license": "MIT",
+      "abiVersion": 15,
+      "asset": "tree-sitter-javascript.wasm",
+      "sha256": "5fb488d0cabb4775a594bab85682de5ad6ce83c0d6ac997a9f82dd084d571240"
+    },
+    {
+      "language": "typescript",
+      "package": "tree-sitter-typescript",
+      "version": "0.23.2",
+      "sourceCommit": "f975a621f4e7f532fe322e13c4f79495e0a7b2e7",
+      "license": "MIT",
+      "abiVersion": 14,
+      "asset": "tree-sitter-typescript.wasm",
+      "sha256": "778025db5a8be0e70f8ccc3671e486dfeddd048c25d9e8a70c26de2e1bf6f97d"
+    },
+    {
+      "language": "tsx",
+      "package": "tree-sitter-typescript",
+      "version": "0.23.2",
+      "sourceCommit": "f975a621f4e7f532fe322e13c4f79495e0a7b2e7",
+      "license": "MIT",
+      "abiVersion": 14,
+      "asset": "tree-sitter-tsx.wasm",
+      "sha256": "79e5da75ea62855a0cd67177685f0164eac87d5f630b3cbe1e0a099751ad30f8"
+    }
+  ]
+}

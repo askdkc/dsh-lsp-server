@@ -18,6 +18,14 @@
       "types": "./lib/types/extra-tool.d.ts",
       "default": "./lib/extra-tool.js"
     },
+    "./code-intelligence": {
+      "types": "./lib/types/code-intelligence.d.ts",
+      "default": "./lib/code-intelligence.js"
+    },
+    "./code-intelligence-contracts": {
+      "types": "./lib/types/code-intelligence-contracts.d.ts",
+      "default": "./lib/code-intelligence-contracts.js"
+    },
     "./package.json": "./package.json",
     "./lsp": {
       "types": "./lib/types/lsp.d.ts",
@@ -45,7 +53,7 @@
     }
   },
   "scripts": {
-    "build": "tsdown && tsc -p tsconfig.build.json",
+    "build": "tsdown && tsc -p tsconfig.build.json && node scripts/copy-structure-assets.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
@@ -61,7 +69,8 @@
     "svelte-language-server": "0.17.15",
     "typescript": "5.7.3",
     "typescript-language-server": "4.3.3",
-    "vscode-langservers-extracted": "4.10.0"
+    "vscode-langservers-extracted": "4.10.0",
+    "web-tree-sitter": "0.27.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.4",
@@ -96,6 +105,8 @@
     "@types/node": "22.10.5",
     "tailwindcss-v3": "npm:tailwindcss@3.4.17",
     "tailwindcss-v4": "npm:tailwindcss@4.1.13",
+    "tree-sitter-javascript": "0.25.0",
+    "tree-sitter-typescript": "0.23.2",
     "tsdown": "0.15.0",
     "typescript": "5.7.3",
     "vitest": "4.1.11"
