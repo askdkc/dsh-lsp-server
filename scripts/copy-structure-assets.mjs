@@ -7,7 +7,8 @@ import { Language, MIN_COMPATIBLE_VERSION, Parser, LANGUAGE_VERSION } from 'web-
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const sourceDir = join(root, 'src', 'structure')
 const sourceGrammarDir = join(sourceDir, 'grammars')
-const outputDir = join(root, 'lib', 'structure')
+// The bundled worker pool resolves its worker relative to a chunk in lib/.
+const outputDir = join(root, 'lib')
 const outputGrammarDir = join(outputDir, 'grammars')
 const manifest = JSON.parse(await readFile(join(sourceGrammarDir, 'manifest.json'), 'utf8'))
 

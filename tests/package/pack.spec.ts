@@ -59,6 +59,9 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
       if (typeof entry === 'object') { await access(join(packagePath, entry.types)); await access(join(packagePath, entry.default)) }
     }
     await writeFile(join(root, 'app.ts'), 'const greeting: string = "hello";\nconsole.log(greeting)')
+    await writeFile(join(root, 'app.js'), 'const value = 1;\n')
+    await writeFile(join(root, 'app.jsx'), 'const View = () => <div />;\n')
+    await writeFile(join(root, 'app.tsx'), 'const View = () => <span />;\n')
     await writeFile(join(root, 'PLAN.md'), '# Plan\n')
     await writeFile(join(root, 'index.html'), '<')
     await writeFile(join(root, 'style.css'), 'a { col }')
@@ -103,6 +106,31 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
       try {
         await ctx.plugin(Fs, {cwd: process.cwd()}); await ctx.plugin(Subprocess); await ctx.plugin(Lsp);
         await ctx.plugin(provider, { servers: {phpantom: {enabled:false}}, tailwind:{enabled:false} });
+        const code = ctx.get('codeIntelligenceRuntime');
+        const scope = {ownerId:'packed-agent',sessionId:'packed-session',workspaceRoot:process.cwd()};
+        for (const [file, language, name, text] of [
+          ['app.js', 'javascript', 'value', 'value = 1'],
+          ['app.jsx', 'javascript', 'View', 'View = () => <div />'],
+          ['app.ts', 'typescript', 'greeting', 'greeting: string = "hello"'],
+          ['app.tsx', 'tsx', 'View', 'View = () => <span />'],
+        ]) {
+          const snapshot = await code.snapshot.open(scope, file);
+          try {
+            assert.equal(snapshot.parserAvailable, true, file + ': packed parser unavailable');
+            assert.equal(snapshot.language, language);
+            assert.equal(snapshot.parseErrors, false);
+            const outline = await code.structure.outline(scope, snapshot.handle, {limit:10});
+            assert.equal(outline.status, 'ok');
+            const declaration = outline.declarations.find(node => node.name === name);
+            assert.ok(declaration, file + ': missing declaration');
+            assert.deepEqual(declaration.range.start, {line:0,character:6});
+            const span = await code.structure.span(scope, declaration.handle);
+            assert.equal(span.status, 'ok');
+            assert.equal(span.text, text);
+          } finally {
+            assert.deepEqual(await code.snapshot.release(scope, snapshot.handle), {released:true});
+          }
+        }
         const result = await ctx.get('lsp').query({workspaceRoot:process.cwd(),filePath:'app.ts',operation:'hover',position:{line:1,character:14}});
         const html = await ctx.get('webstackLsp').completion({workspaceRoot:process.cwd(),filePath:'index.html',position:{line:0,character:1}});
         const css = await ctx.get('webstackLsp').completion({workspaceRoot:process.cwd(),filePath:'style.css',position:{line:0,character:7}});
