@@ -8,6 +8,7 @@ export interface StructureWorkerRequest {
   language: StructureLanguage
   text: string
   querySource: string
+  scriptQueries?: { javascript: string; typescript: string }
   limit: number
   snapshotHandle?: string
   previousSnapshotHandle?: string

@@ -1,6 +1,6 @@
 import type { CompletionResult, DiagnosticsResult, LspPosition, LspRange, NavigationResult } from '../service.js'
 
-export type StructureLanguage = 'javascript' | 'typescript' | 'tsx'
+export type StructureLanguage = 'javascript' | 'typescript' | 'tsx' | 'php' | 'svelte'
 export type CodeIntelligenceStatus = 'ok' | 'partial' | 'unsupported' | 'unavailable' | 'stale' | 'cancelled' | 'timeout' | 'limit_exceeded'
 export type SourceKind = 'disk' | 'overlay'
 

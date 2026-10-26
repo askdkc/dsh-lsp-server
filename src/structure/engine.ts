@@ -56,7 +56,7 @@ export class StructureEngine {
       const node = this.node(record, scope, declaration.kind, declaration.startIndex, declaration.endIndex, nameCapture ? record.source.text.slice(nameCapture.startIndex, nameCapture.endIndex).slice(0, 256) : undefined, declaration.childCount, coordinates)
       declarations.push(node)
     }
-    return this.outlineResult(record, declarations, result)
+    return this.outlineResult(record, declarations, result, limit)
   }
 
   async enclosing(record: SnapshotRecord, scope: SnapshotScope, position: { line: number; character: number }, kinds?: string[], signal?: AbortSignal): Promise<StructureEnclosingResult> {
@@ -88,7 +88,7 @@ export class StructureEngine {
       if (captures.length >= limit) break captureLoop
     }
     if (Buffer.byteLength(JSON.stringify(captures), 'utf8') > MAX_STRUCTURE_RESPONSE_BYTES) throw new WebstackLspError('LSP_STRUCTURE_LIMIT', 'query result exceeds the response byte limit')
-    return { status: result.status, handle: record.descriptor.handle, version: record.descriptor.version, queryId, captures, truncated: Boolean(result.truncated || (result.matches?.length ?? 0) > limit), processed: captures.length, errors: publicErrors(result.errors) }
+    return { status: result.status, handle: record.descriptor.handle, version: record.descriptor.version, queryId, captures, truncated: Boolean(result.truncated || (result.matches ?? []).reduce((total, match) => total + match.captures.length, 0) > limit), processed: captures.length, errors: publicErrors(result.errors) }
   }
 
   async span(record: SnapshotRecord, scope: SnapshotScope, nodeHandle: string, maxChars = MAX_SPAN_CHARS): Promise<StructureSpanResult> {
@@ -134,18 +134,25 @@ export class StructureEngine {
       this.capability('javascript', ['.js', '.jsx', '.mjs', '.cjs'], 15),
       this.capability('typescript', ['.ts', '.mts', '.cts'], 14),
       this.capability('tsx', ['.tsx'], 14),
+      this.capability('php', ['.php'], 15),
+      // Svelte uses both script grammars, not a separate grammar ABI.
+      this.capability('svelte', ['.svelte'], null),
     ]
   }
 
   async dispose(): Promise<void> { this.nodeHandles.clear(); this.snapshotOwners.clear(); await this.workers.dispose() }
 
   private async runMatches(language: StructureLanguage, record: SnapshotRecord, queryId: string, limit: number, range?: { startIndex: number; endIndex: number }, signal?: AbortSignal) {
+    if (language === 'svelte') {
+      const scriptQueries = { javascript: getRegisteredQuery('javascript', queryId)!, typescript: getRegisteredQuery('typescript', queryId)! }
+      return this.runWorker(language, { operation: 'matches', language, text: record.source.text, querySource: '', scriptQueries, limit, snapshotHandle: record.descriptor.handle, ...(range ?? {}) }, signal)
+    }
     const querySource = getRegisteredQuery(language, queryId)
     if (!querySource) throw new WebstackLspError('LSP_STRUCTURE_UNSUPPORTED', `query ${queryId} is not registered for ${language}`)
     return this.runWorker(language, { operation: 'matches', language, text: record.source.text, querySource, limit, snapshotHandle: record.descriptor.handle, ...(range ?? {}) }, signal)
   }
 
-  private capability(language: StructureLanguage, extensions: string[], abiVersion: number) {
+  private capability(language: StructureLanguage, extensions: string[], abiVersion: number | null) {
     const lastError = this.parserFailures.get(language)
     return { language, extensions, available: !lastError, abiVersion, ...(lastError ? { lastError } : {}) }
   }
@@ -162,9 +169,9 @@ export class StructureEngine {
     }
   }
 
-  private outlineResult(record: SnapshotRecord, declarations: StructureNode[], result: Awaited<ReturnType<StructureWorkerPool['execute']>>): StructureOutlineResult {
-    const truncated = Boolean(result.truncated || declarations.length > MAX_OUTLINE)
-    const selected = declarations.slice(0, MAX_OUTLINE)
+  private outlineResult(record: SnapshotRecord, declarations: StructureNode[], result: Awaited<ReturnType<StructureWorkerPool['execute']>>, limit: number): StructureOutlineResult {
+    const truncated = Boolean(result.truncated || declarations.length > limit)
+    const selected = declarations.slice(0, limit)
     const jsonBytes = Buffer.byteLength(JSON.stringify(selected), 'utf8')
     if (jsonBytes > MAX_STRUCTURE_RESPONSE_BYTES) throw new WebstackLspError('LSP_STRUCTURE_LIMIT', 'outline result exceeds the response byte limit')
     return { status: result.status, handle: record.descriptor.handle, version: record.descriptor.version, declarations: selected, truncated, processed: selected.length, errors: publicErrors(result.errors) }
@@ -188,5 +195,5 @@ function positiveLimit(value: number | undefined, maximum: number, label: string
 function publicErrors(errors: StructureErrorSummary): StructureErrorSummary { return { ...errors } }
 
 function publicNodeKind(kind: string): string {
-  return ({ function_declaration: 'function', class_declaration: 'class', interface_declaration: 'interface', type_alias_declaration: 'type', enum_declaration: 'enum', method_definition: 'method', variable_declarator: 'variable' } as Record<string, string>)[kind] ?? kind
+  return ({ function_declaration: 'function', function_definition: 'function', class_declaration: 'class', interface_declaration: 'interface', type_alias_declaration: 'type', enum_declaration: 'enum', method_definition: 'method', method_declaration: 'method', variable_declarator: 'variable' } as Record<string, string>)[kind] ?? kind
 }

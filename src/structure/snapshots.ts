@@ -26,6 +26,7 @@ const EXTENSION_LANGUAGE: Record<string, StructureLanguage> = {
   '.js': 'javascript', '.jsx': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript',
   '.ts': 'typescript', '.mts': 'typescript', '.cts': 'typescript',
   '.tsx': 'tsx',
+  '.php': 'php', '.svelte': 'svelte',
 }
 
 export class DocumentSnapshotStore {
@@ -141,6 +142,8 @@ export class DocumentSnapshotStore {
 }
 
 export function languageForPath(filePath: string): StructureLanguage | null {
+  // Blade's PHP-like suffix does not make its template syntax a PHP document.
+  if (filePath.toLowerCase().endsWith('.blade.php')) return null
   const suffix = filePath.slice(filePath.lastIndexOf('.')).toLowerCase()
   return EXTENSION_LANGUAGE[suffix] ?? null
 }

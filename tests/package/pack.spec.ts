@@ -62,6 +62,9 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
     await writeFile(join(root, 'app.js'), 'const value = 1;\n')
     await writeFile(join(root, 'app.jsx'), 'const View = () => <div />;\n')
     await writeFile(join(root, 'app.tsx'), 'const View = () => <span />;\n')
+    await writeFile(join(root, 'app.php'), '<?php\nclass Greeter { public function greet() {} }\nfunction helper() {}\n')
+    await writeFile(join(root, 'js.svelte'), '<h1>😀</h1>\r\n<script context="module">export function shared() {}</script>\r\n<script>const local = 1;</script>\r\n')
+    await writeFile(join(root, 'ts.svelte'), '<p>日本語😀</p>\r\n<script lang="ts">interface Props {name: string}\r\nconst label: Props = {name: "x"};</script>\r\n')
     await writeFile(join(root, 'PLAN.md'), '# Plan\n')
     await writeFile(join(root, 'index.html'), '<')
     await writeFile(join(root, 'style.css'), 'a { col }')
@@ -108,11 +111,18 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
         await ctx.plugin(provider, { servers: {phpantom: {enabled:false}}, tailwind:{enabled:false} });
         const code = ctx.get('codeIntelligenceRuntime');
         const scope = {ownerId:'packed-agent',sessionId:'packed-session',workspaceRoot:process.cwd()};
-        for (const [file, language, name, text] of [
-          ['app.js', 'javascript', 'value', 'value = 1'],
-          ['app.jsx', 'javascript', 'View', 'View = () => <div />'],
-          ['app.ts', 'typescript', 'greeting', 'greeting: string = "hello"'],
-          ['app.tsx', 'tsx', 'View', 'View = () => <span />'],
+        for (const [file, language, name, text, start] of [
+          ['app.js', 'javascript', 'value', 'value = 1', {line:0,character:6}],
+          ['app.jsx', 'javascript', 'View', 'View = () => <div />', {line:0,character:6}],
+          ['app.ts', 'typescript', 'greeting', 'greeting: string = "hello"', {line:0,character:6}],
+          ['app.tsx', 'tsx', 'View', 'View = () => <span />', {line:0,character:6}],
+          ['app.php', 'php', 'Greeter', 'class Greeter { public function greet() {} }', {line:1,character:0}],
+          ['app.php', 'php', 'greet', 'public function greet() {}', {line:1,character:16}],
+          ['app.php', 'php', 'helper', 'function helper() {}', {line:2,character:0}],
+          ['js.svelte', 'svelte', 'shared', 'function shared() {}', {line:1,character:32}],
+          ['js.svelte', 'svelte', 'local', 'local = 1', {line:2,character:14}],
+          ['ts.svelte', 'svelte', 'Props', 'interface Props {name: string}', {line:1,character:18}],
+          ['ts.svelte', 'svelte', 'label', 'label: Props = {name: "x"}', {line:2,character:6}],
         ]) {
           const snapshot = await code.snapshot.open(scope, file);
           try {
@@ -123,7 +133,12 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
             assert.equal(outline.status, 'ok');
             const declaration = outline.declarations.find(node => node.name === name);
             assert.ok(declaration, file + ': missing declaration');
-            assert.deepEqual(declaration.range.start, {line:0,character:6});
+            assert.deepEqual(declaration.range.start, start);
+            assert.deepEqual(declaration.range.end, {line:start.line,character:start.character + text.length});
+            const query = await code.structure.query(scope, snapshot.handle, 'declarations', {limit:20});
+            assert.equal(query.status, 'ok');
+            assert.ok(query.captures.some(capture => capture.capture === 'name' && capture.name === name));
+            assert.ok(query.captures.some(capture => capture.capture === 'declaration' && JSON.stringify(capture.range) === JSON.stringify(declaration.range)));
             const span = await code.structure.span(scope, declaration.handle);
             assert.equal(span.status, 'ok');
             assert.equal(span.text, text);
@@ -151,6 +166,15 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
     `)
     const result = await exec(process.execPath, ['smoke.mjs'], { cwd: root })
     expect(result.stdout).toContain('packed provider ok')
+    // Fresh workers must report a missing bundled grammar, not reuse a prior tree.
+    const phpAsset = join(packagePath, 'lib/grammars/tree-sitter-php.wasm')
+    const phpBytes = await readFile(phpAsset)
+    try {
+      await unlink(phpAsset)
+      const failed = await exec(process.execPath, ['smoke.mjs'], {cwd:root}).catch(error => error)
+      expect(failed.code).toBe(1)
+      expect(failed.stderr).toContain('app.php: packed parser unavailable')
+    } finally { await writeFile(phpAsset, phpBytes) }
     // A new process cannot hide a dependency import failure behind its module cache.
     const toolEntry = join(root, 'node_modules/@deepseek-ai/dsh-tool-lsp/lib/index.js')
     const original = await readFile(toolEntry, 'utf8')

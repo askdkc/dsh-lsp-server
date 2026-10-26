@@ -1,6 +1,11 @@
 import type { StructureLanguage } from './types.js'
 
-const declarations = {
+const declarations: Partial<Record<StructureLanguage, string[]>> = {
+  php: [
+    '(class_declaration name: (_) @name) @declaration',
+    '(function_definition name: (_) @name) @declaration',
+    '(method_declaration name: (_) @name) @declaration',
+  ],
   javascript: [
     '(function_declaration name: (_) @name) @declaration',
     '(class_declaration name: (_) @name) @declaration',
@@ -25,19 +30,19 @@ const declarations = {
     '(method_definition name: (_) @name) @declaration',
     '(variable_declarator name: (_) @name) @declaration',
   ],
-} satisfies Record<StructureLanguage, string[]>
+}
 
-const imports = {
+const imports: Partial<Record<StructureLanguage, string[]>> = {
   javascript: ['(import_statement) @import', '(export_statement) @export'],
   typescript: ['(import_statement) @import', '(export_statement) @export'],
   tsx: ['(import_statement) @import', '(export_statement) @export'],
-} satisfies Record<StructureLanguage, string[]>
+}
 
-const calls = {
+const calls: Partial<Record<StructureLanguage, string[]>> = {
   javascript: ['(call_expression function: (_) @call) @callsite'],
   typescript: ['(call_expression function: (_) @call) @callsite'],
   tsx: ['(call_expression function: (_) @call) @callsite'],
-} satisfies Record<StructureLanguage, string[]>
+}
 
 export type RegisteredQueryId = 'declarations' | 'calls' | 'imports'
 
