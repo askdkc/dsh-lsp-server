@@ -60,7 +60,7 @@
     "check": "npm run typecheck && npm test && npm run build && npm run test:package",
     "test:package": "vitest run --config vitest.package.config.ts",
     "prepare": "npm run build",
-    "prepublishOnly": "npm run check"
+    "prepublishOnly": "pnpm install --frozen-lockfile --ignore-scripts --prod=false --optional=true && npm run check"
   },
   "dependencies": {
     "@deepseek-ai/dsh-lsp": "0.2.0-rc.2",
@@ -111,7 +111,7 @@
     "tree-sitter-typescript": "0.23.2",
     "tsdown": "0.15.0",
     "typescript": "5.7.3",
-    "vitest": "4.1.11"
+    "vitest": "4.1.12"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
@@ -124,7 +124,7 @@
     "overrides": {
       "tsdown>rolldown": "1.0.0-beta.38",
       "svelte-language-server>svelte": "5.55.7",
-      "vite": "6.4.3",
+      "vite": "6.4.5",
       "source-map-js": "1.2.2",
       "postcss-selector-parser": "7.1.6"
     }
@@ -141,7 +141,7 @@
     "svelte-language-server": {
       "svelte": "5.55.7"
     },
-    "vite": "6.4.3"
+    "vite": "6.4.5"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
