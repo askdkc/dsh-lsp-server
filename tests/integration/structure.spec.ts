@@ -358,3 +358,63 @@ function sourcePosition(source: string, index: number) {
 function sourceRange(source: string, start: number, length: number) {
   return { start: sourcePosition(source, start), end: sourcePosition(source, start + length) }
 }
+
+// Every grammar the pinned manifest advertises must actually parse and expose
+// declarations through the same registered query ids as the original four.
+const MULTI_LANGUAGE_FIXTURES = [
+  { file: 'run.sh', language: 'bash', names: ['greet', 'shout'] },
+  { file: 'math.c', language: 'c', names: ['area', 'add'] },
+  { file: 'shape.hpp', language: 'cpp', names: ['Shape', 'area'] },
+  { file: 'Widget.cs', language: 'c_sharp', names: ['Widget', 'Render'] },
+  { file: 'theme.css', language: 'css', names: [] },
+  { file: 'server.go', language: 'go', names: ['Greet', 'Hello'] },
+  { file: 'Calc.hs', language: 'haskell', names: ['add'] },
+  { file: 'page.html', language: 'html', names: [] },
+  { file: 'Service.java', language: 'java', names: ['Service', 'run'] },
+  { file: 'data.json', language: 'json', names: [] },
+  { file: 'calc.jl', language: 'julia', names: ['area'] },
+  { file: 'calc.ml', language: 'ocaml', names: ['double'] },
+  { file: 'calc.mli', language: 'ocaml_interface', names: ['double'] },
+  { file: 'calc.py', language: 'python', names: ['Area', 'area'] },
+  { file: 'query.dbscheme', language: 'ql_dbscheme', names: ['mytable'] },
+  { file: 'calc.rb', language: 'ruby', names: ['Calculator', 'area'] },
+  { file: 'calc.rs', language: 'rust', names: ['Area', 'area'] },
+  { file: 'Calc.scala', language: 'scala', names: ['Calc', 'area'] },
+] as const
+
+it.each(MULTI_LANGUAGE_FIXTURES)('parses $language structure through the shared snapshot contract', async ({ file, language, names }) => {
+  const root = await mkdtemp(join(tmpdir(), 'code-multilang-'))
+  cleanup.push(() => rm(root, { recursive: true, force: true }))
+  await writeFile(join(root, file), samples[language]!)
+  const h = await harness(root)
+  cleanup.push(h.dispose)
+  const code = (h.ctx as any).get('codeIntelligenceRuntime')
+  const scope = { ownerId: 'agent', sessionId: 'session', workspaceRoot: root }
+  const snapshot = await code.snapshot.open(scope, file)
+  expect(snapshot).toMatchObject({ status: 'ok', language, parserAvailable: true })
+  const outline = await code.structure.outline(scope, snapshot.handle)
+  expect(outline.status).toBe('ok')
+  for (const name of names) expect(outline.declarations.map((n: any) => n.name)).toContain(name)
+  await code.snapshot.release(scope, snapshot.handle)
+})
+
+const samples: Record<string, string> = {
+  bash: 'greet() {\n  echo hi\n}\nfunction shout {\n  :\n}\n',
+  c: 'int add(int a, int b) { return a + b; }\nint area(int r) { return r * r; }\n',
+  cpp: 'class Shape {\npublic:\n  int area() { return 1; }\n};\nint add(int a) { return a; }\n',
+  c_sharp: 'namespace N {\n  class Widget {\n    void Render() {}\n  }\n}\n',
+  css: '.card { color: red; }\n',
+  go: 'package m\n\nfunc Greet() {}\nfunc Hello() {}\n',
+  haskell: 'module M where\n\nadd :: Int -> Int\nadd x = x\n',
+  html: '<div id="a"><span>x</span></div>\n',
+  java: 'class Service {\n  void run() {}\n}\n',
+  json: '{"a": 1}\n',
+  julia: 'function area(r)\n  r\nend\n',
+  ocaml: 'let double x = x\n',
+  ocaml_interface: 'val double : int -> int\n',
+  python: 'class Area:\n    pass\n\ndef area(r):\n    return r\n',
+  ql_dbscheme: 'mytable(int id: @int ref, string name: string)\n',
+  ruby: 'class Calculator\n  def area\n  end\nend\n',
+  rust: 'struct Area;\nfn area() {}\n',
+  scala: 'object Calc {\n  def area: Int = 1\n}\n',
+}

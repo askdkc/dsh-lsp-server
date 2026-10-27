@@ -137,6 +137,24 @@ export class StructureEngine {
       this.capability('php', ['.php'], 15),
       // Svelte uses both script grammars, not a separate grammar ABI.
       this.capability('svelte', ['.svelte'], null),
+      this.capability('bash', ['.sh', '.bash', '.zsh', '.ksh'], 15),
+      this.capability('c', ['.c', '.h'], 15),
+      this.capability('cpp', ['.cc', '.cpp', '.cxx', '.hpp', '.hh', '.hxx', '.c++', '.h++'], 14),
+      this.capability('c_sharp', ['.cs', '.csx'], 15),
+      this.capability('css', ['.css'], 15),
+      this.capability('go', ['.go'], 15),
+      this.capability('haskell', ['.hs', '.hsc'], 14),
+      this.capability('html', ['.html', '.htm', '.xhtml'], 14),
+      this.capability('java', ['.java'], 14),
+      this.capability('json', ['.json', '.jsonc'], 14),
+      this.capability('julia', ['.jl'], 14),
+      this.capability('ocaml', ['.ml'], 14),
+      this.capability('ocaml_interface', ['.mli'], 14),
+      this.capability('python', ['.py', '.pyi', '.pyw'], 15),
+      this.capability('ql_dbscheme', ['.dbscheme'], 14),
+      this.capability('ruby', ['.rb', '.rake', '.gemspec'], 14),
+      this.capability('rust', ['.rs'], 14),
+      this.capability('scala', ['.scala', '.sc', '.sbt'], 14),
     ]
   }
 
@@ -194,6 +212,22 @@ function positiveLimit(value: number | undefined, maximum: number, label: string
 
 function publicErrors(errors: StructureErrorSummary): StructureErrorSummary { return { ...errors } }
 
-function publicNodeKind(kind: string): string {
-  return ({ function_declaration: 'function', function_definition: 'function', class_declaration: 'class', interface_declaration: 'interface', type_alias_declaration: 'type', enum_declaration: 'enum', method_definition: 'method', method_declaration: 'method', variable_declarator: 'variable' } as Record<string, string>)[kind] ?? kind
+const PUBLIC_NODE_KINDS: Record<string, string> = {
+  function_declaration: 'function', function_definition: 'function', function_item: 'function',
+  class_declaration: 'class', class_definition: 'class', class_specifier: 'class',
+  struct_declaration: 'struct', struct_item: 'struct', struct_specifier: 'struct',
+  struct_definition: 'struct',
+  interface_declaration: 'interface', trait_definition: 'interface',
+  type_alias_declaration: 'type', type_definition: 'type', type_item: 'type',
+  type_spec: 'type', type_binding: 'type', type_synomym: 'type',
+  enum_declaration: 'enum', enum_item: 'enum', enum_specifier: 'enum',
+  method_definition: 'method', method_declaration: 'method',
+  variable_declarator: 'variable', value_definition: 'variable',
+  value_specification: 'value',
+  module_definition: 'module', mod_item: 'module', namespace_definition: 'module',
+  namespace_declaration: 'module',
+  data_type: 'data', newtype: 'data', abstract_definition: 'abstract',
+  record_declaration: 'record', annotation_type_declaration: 'annotation',
 }
+
+function publicNodeKind(kind: string): string { return PUBLIC_NODE_KINDS[kind] ?? kind }

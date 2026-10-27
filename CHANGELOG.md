@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expand bundled Tree-sitter structure support from 4 grammars to 21: Bash, C, C#, C++, CSS, Go, Haskell,
+  HTML, Java, JSON, Julia, OCaml, OCaml interface, Python, QL DBScheme, Ruby, Rust, and Scala, alongside the
+  existing JavaScript, TypeScript, TSX, and PHP. Each grammar is pinned by version, upstream commit, ABI, and
+  SHA-256, and registers `declarations` queries with selective `imports`/`calls` coverage.
 - Align the LSP service, tool, host peers, and development dependencies with DSH `0.2.0-rc.2` so the plugin loads on that runtime.
 - Require Node.js 22.19+ or 24+ to match DSH 0.2.0.
 - Use the same DSH launcher for plugin installation and Web startup.

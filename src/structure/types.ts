@@ -1,6 +1,10 @@
 import type { CompletionResult, DiagnosticsResult, LspPosition, LspRange, NavigationResult } from '../service.js'
 
-export type StructureLanguage = 'javascript' | 'typescript' | 'tsx' | 'php' | 'svelte'
+export type StructureLanguage =
+  | 'javascript' | 'typescript' | 'tsx' | 'php' | 'svelte'
+  | 'bash' | 'c' | 'cpp' | 'c_sharp' | 'css' | 'go' | 'haskell' | 'html'
+  | 'java' | 'json' | 'julia' | 'ocaml' | 'ocaml_interface' | 'python'
+  | 'ql_dbscheme' | 'ruby' | 'rust' | 'scala'
 export type CodeIntelligenceStatus = 'ok' | 'partial' | 'unsupported' | 'unavailable' | 'stale' | 'cancelled' | 'timeout' | 'limit_exceeded'
 export type SourceKind = 'disk' | 'overlay'
 

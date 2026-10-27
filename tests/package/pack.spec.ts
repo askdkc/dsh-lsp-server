@@ -68,6 +68,22 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
     await writeFile(join(root, 'PLAN.md'), '# Plan\n')
     await writeFile(join(root, 'index.html'), '<')
     await writeFile(join(root, 'style.css'), 'a { col }')
+    await writeFile(join(root, 'run.sh'), 'greet() { echo hi; }\n')
+    await writeFile(join(root, 'math.c'), 'int add(int a, int b) { return a + b; }\n')
+    await writeFile(join(root, 'shape.hpp'), 'class Shape { public: int area() { return 1; } };\n')
+    await writeFile(join(root, 'Widget.cs'), 'namespace N { class Widget { void Render() {} } }\n')
+    await writeFile(join(root, 'server.go'), 'package m\n\nfunc Greet() {}\n')
+    await writeFile(join(root, 'Calc.hs'), 'module M where\n\nadd :: Int -> Int\nadd x = x\n')
+    await writeFile(join(root, 'Service.java'), 'class Service { void run() {} }\n')
+    await writeFile(join(root, 'data.json'), '{"a": 1}\n')
+    await writeFile(join(root, 'calc.jl'), 'function area(r) r end\n')
+    await writeFile(join(root, 'calc.ml'), 'let double x = x\n')
+    await writeFile(join(root, 'calc.mli'), 'val double : int -> int\n')
+    await writeFile(join(root, 'calc.py'), 'class Area: pass\n')
+    await writeFile(join(root, 'query.dbscheme'), 'mytable(int id: @int ref)\n')
+    await writeFile(join(root, 'calc.rb'), 'class Calculator; def area; end; end\n')
+    await writeFile(join(root, 'calc.rs'), 'struct Area;\nfn area() {}\n')
+    await writeFile(join(root, 'Calc.scala'), 'object Calc { def area: Int = 1 }\n')
     const patch = await readFile(join(packagePath, manifest.dsh.bundle.patch), 'utf8')
     const plugins = [...patch.matchAll(/name: '([^']+)'/g)].map(match => match[1])
     expect(plugins).toHaveLength(4)
@@ -123,6 +139,22 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
           ['js.svelte', 'svelte', 'local', 'local = 1', {line:2,character:14}],
           ['ts.svelte', 'svelte', 'Props', 'interface Props {name: string}', {line:1,character:18}],
           ['ts.svelte', 'svelte', 'label', 'label: Props = {name: "x"}', {line:2,character:6}],
+          ['run.sh', 'bash', 'greet', 'greet() { echo hi; }', {line:0,character:0}],
+          ['math.c', 'c', 'add', 'int add(int a, int b) { return a + b; }', {line:0,character:0}],
+          ['shape.hpp', 'cpp', 'Shape', 'class Shape { public: int area() { return 1; } }', {line:0,character:0}],
+          ['Widget.cs', 'c_sharp', 'Widget', 'class Widget { void Render() {} }', {line:0,character:14}],
+          ['server.go', 'go', 'Greet', 'func Greet() {}', {line:2,character:0}],
+          ['Calc.hs', 'haskell', 'add', 'add :: Int -> Int', {line:2,character:0}],
+          ['Service.java', 'java', 'Service', 'class Service { void run() {} }', {line:0,character:0}],
+          ['data.json', 'json', '"a"', '"a": 1', {line:0,character:1}],
+          ['calc.jl', 'julia', 'area', 'function area(r) r end', {line:0,character:0}],
+          ['calc.ml', 'ocaml', 'double', 'let double x = x', {line:0,character:0}],
+          ['calc.mli', 'ocaml_interface', 'double', 'val double : int -> int', {line:0,character:0}],
+          ['calc.py', 'python', 'Area', 'class Area: pass', {line:0,character:0}],
+          ['query.dbscheme', 'ql_dbscheme', 'mytable', 'mytable(int id: @int ref)', {line:0,character:0}],
+          ['calc.rb', 'ruby', 'Calculator', 'class Calculator; def area; end; end', {line:0,character:0}],
+          ['calc.rs', 'rust', 'Area', 'struct Area;', {line:0,character:0}],
+          ['Calc.scala', 'scala', 'Calc', 'object Calc { def area: Int = 1 }', {line:0,character:0}],
         ]) {
           const snapshot = await code.snapshot.open(scope, file);
           try {

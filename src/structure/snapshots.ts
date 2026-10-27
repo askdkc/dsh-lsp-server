@@ -27,6 +27,23 @@ const EXTENSION_LANGUAGE: Record<string, StructureLanguage> = {
   '.ts': 'typescript', '.mts': 'typescript', '.cts': 'typescript',
   '.tsx': 'tsx',
   '.php': 'php', '.svelte': 'svelte',
+  '.sh': 'bash', '.bash': 'bash', '.zsh': 'bash', '.ksh': 'bash',
+  '.c': 'c', '.h': 'c',
+  '.cc': 'cpp', '.cpp': 'cpp', '.cxx': 'cpp', '.hpp': 'cpp', '.hh': 'cpp', '.hxx': 'cpp', '.c++': 'cpp', '.h++': 'cpp',
+  '.cs': 'c_sharp', '.csx': 'c_sharp',
+  '.css': 'css',
+  '.go': 'go',
+  '.hs': 'haskell', '.hsc': 'haskell',
+  '.html': 'html', '.htm': 'html', '.xhtml': 'html',
+  '.java': 'java',
+  '.json': 'json', '.jsonc': 'json',
+  '.jl': 'julia',
+  '.ml': 'ocaml', '.mli': 'ocaml_interface',
+  '.py': 'python', '.pyi': 'python', '.pyw': 'python',
+  '.dbscheme': 'ql_dbscheme',
+  '.rb': 'ruby', '.rake': 'ruby', '.gemspec': 'ruby',
+  '.rs': 'rust',
+  '.scala': 'scala', '.sc': 'scala', '.sbt': 'scala',
 }
 
 export class DocumentSnapshotStore {

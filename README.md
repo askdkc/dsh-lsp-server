@@ -6,11 +6,17 @@ Markdown and other unsupported documents return an explicit `skipped` diagnostic
 
 ## Read-only code structure
 
-The provider also bundles Tree-sitter WASM grammars for JavaScript, TypeScript, TSX, and PHP. Svelte instance and module scripts reuse the JavaScript/TypeScript grammars, with ranges mapped back to the component snapshot. Through `lsp_extra`, open a workspace-relative snapshot, use its opaque handle with `structure` (`outline`, `enclosing`, `query`, or bounded `span`) or `semantic` operations, then release the snapshot. Structure and semantic positions use zero-based UTF-16 coordinates; completion keeps its existing one-based coordinates. Only registered query IDs (`declarations`, `calls`, `imports`) are accepted. No edits or arbitrary Tree-sitter queries are exposed.
+The provider also bundles 21 Tree-sitter WASM grammars: Bash, C, C#, C++, CSS, Go, Haskell, HTML, Java,
+JavaScript, JSON, Julia, OCaml (implementation and interface), PHP, Python, QL DBScheme, Ruby, Rust,
+Scala, TypeScript, and TSX. Every grammar is pinned by npm version, upstream commit, license, ABI version,
+and SHA-256 in `src/structure/grammars/manifest.json`; the build fails if an asset does not match. Svelte instance and module scripts reuse the JavaScript/TypeScript grammars, with ranges mapped back to the component snapshot. Through `lsp_extra`, open a workspace-relative snapshot, use its opaque handle with `structure` (`outline`, `enclosing`, `query`, or bounded `span`) or `semantic` operations, then release the snapshot. Structure and semantic positions use zero-based UTF-16 coordinates; completion keeps its existing one-based coordinates. Only registered query IDs (`declarations`, `calls`, `imports`) are accepted. No edits or arbitrary Tree-sitter queries are exposed.
 
 For example, inspect parser availability, open `src/index.ts` with `operation: "snapshot", action: "open", file_path: "src/index.ts"`, pass the returned handle to `operation: "structure", action: "outline"`, and release it with `operation: "snapshot", action: "release"`. Snapshot documents are capped at 2 MiB; outline/query results, source spans, responses, and evaluation budgets are bounded. Unsupported languages or unavailable semantic servers are reported explicitly rather than treated as empty successful results. Tree-sitter cache entries are bounded and released with their snapshots or worker lifetime.
 
-PHP supports `declarations` (named classes, functions, and methods) and the corresponding outline, enclosing, and span operations without PHPantom. Svelte supports the registered JavaScript/TypeScript queries inside top-level `<script>` blocks, including `lang="ts"`, `module`, and `context="module"`; markup and styles are not code declarations. Positions and spans refer to the original component snapshot, not extracted scripts (DSH may normalize line endings and strip a UTF-8 BOM when reading text). Blade, HTML, CSS, and Rust structural grammars are not included; their existing LSP routing does not imply structural-parser support.
+PHP supports `declarations` (named classes, functions, and methods) and the corresponding outline, enclosing, and span operations without PHPantom. Svelte supports the registered JavaScript/TypeScript queries inside top-level `<script>` blocks, including `lang="ts"`, `module`, and `context="module"`; markup and styles are not code declarations. Positions and spans refer to the original component snapshot, not extracted scripts (DSH may normalize line endings and strip a UTF-8 BOM when reading text). Blade templates and Markdown are intentionally not parsed: Blade mixes template syntax that is not PHP, and
+Markdown is prose rather than code structure. Their existing LSP routing does not imply structural-parser support.
+Run `lsp_extra` with `operation: "status"` or `operation: "capabilities"` to list the grammars, their file
+extensions, ABI versions, and current availability.
 
 ## Requirements
 
