@@ -21,7 +21,7 @@ process.stdin.on('data', chunk => {
     if (message.id === 'edit') { edit = message.result; flush(); continue }
     if (message.method === 'initialize') {
       if (mode === 'hang-init') continue
-      send({ id: message.id, result: { capabilities: { textDocumentSync: 1, hoverProvider: true, definitionProvider: true, completionProvider: {}, positionEncoding: 'utf-16', ...(mode === 'pull-diagnostics' ? { diagnosticProvider: { interFileDependencies: false, workspaceDiagnostics: false } } : {}) } } })
+      send({ id: message.id, result: { capabilities: { textDocumentSync: 1, hoverProvider: true, definitionProvider: true, completionProvider: {}, positionEncoding: 'utf-16', ...(mode.startsWith('typescript-') ? { executeCommandProvider: { commands: ['typescript.tsserverRequest'] } } : {}), ...(mode === 'pull-diagnostics' ? { diagnosticProvider: { interFileDependencies: false, workspaceDiagnostics: false } } : {}) } } })
     } else if (message.method === 'initialized') {
       send({ id: 'settings', method: 'workspace/configuration', params: { items: [{ section: 'test' }, { section: 'missing' }] } })
       send({ id: 'edit', method: 'workspace/applyEdit', params: { edit: { changes: {} } } })
@@ -37,6 +37,13 @@ process.stdin.on('data', chunk => {
       if (mode === 'late-close-diagnostics') pendingCloseDiagnostics = { method: 'textDocument/publishDiagnostics', params: { uri: message.params.textDocument.uri, diagnostics: [] } }
     } else if (message.method === 'textDocument/diagnostic') {
       send({ id: message.id, result: { kind: 'full', items: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }, severity: 1, message: source }] } })
+    } else if (message.method === 'workspace/executeCommand' && mode.startsWith('typescript-')) {
+      const [command, args] = message.params.arguments
+      if (args.file !== uri) throw new Error('diagnostics must target the opened document')
+      if (mode === 'typescript-hang') continue
+      if (mode === 'typescript-error') { send({ id: message.id, error: { code: -32603, message: 'diagnostic failure' } }); continue }
+      const body = command === 'semanticDiagnosticsSync' && source !== 'clean' ? [{ start: { line: 1, offset: 1 }, end: { line: 1, offset: 2 }, category: 'error', code: 2322, text: source }] : []
+      send({ id: message.id, result: { type: 'response', success: true, body: mode === 'typescript-malformed' ? null : mode === 'typescript-malformed-item' ? [{ text: 'invalid diagnostic' }] : body } })
     } else if (message.method === 'textDocument/hover') {
       if (mode === 'hang') continue
       if (mode === 'crash-once' && !existsSync(trace + '.crashed')) { writeFileSync(trace + '.crashed', ''); process.exit(17) }

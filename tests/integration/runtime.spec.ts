@@ -126,6 +126,28 @@ it('reuses a pull diagnostic server and returns the current document response', 
   const messages = (await readFile(h.trace, 'utf8')).trim().split('\n').map(line => JSON.parse(line))
   expect(messages.filter(message => message.method === 'initialize')).toHaveLength(1)
 })
+it('waits for complete TypeScript diagnostics despite an early empty push notification', async () => {
+  const h = await setup('typescript-diagnostics')
+  await h.lsp.query(h.request)
+  const request = { workspaceRoot: h.root, filePath: 'app.ts' }
+  expect((await h.extra.diagnostics(request)).diagnostics).toMatchObject([{ severity: 1, code: 2322, message: 'const value = 1', range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } }])
+  await writeFile(join(h.root, 'app.ts'), 'const value = 2')
+  expect((await h.extra.diagnostics(request)).diagnostics).toMatchObject([{ message: 'const value = 2' }])
+  await writeFile(join(h.root, 'app.ts'), 'clean')
+  expect((await h.extra.diagnostics(request)).diagnostics).toEqual([])
+  const messages = (await readFile(h.trace, 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+  expect(messages.filter(message => message.method === 'initialize')).toHaveLength(1)
+  expect(messages.filter(message => message.method === 'workspace/executeCommand').map(message => message.params.arguments[0])).toEqual(Array(3).fill(['syntacticDiagnosticsSync', 'semanticDiagnosticsSync', 'suggestionDiagnosticsSync']).flat())
+})
+it.each([
+  ['typescript-malformed', { code: 'LSP_MALFORMED_RESPONSE' }],
+  ['typescript-malformed-item', { code: 'LSP_MALFORMED_RESPONSE' }],
+  ['typescript-error', { message: '-32603: diagnostic failure' }],
+  ['typescript-hang', { name: 'AbortError' }],
+] as const)('does not report failed TypeScript diagnostics as clean: %s', async (mode, error) => {
+  const h = await setup(mode)
+  await expect(h.extra.diagnostics({ workspaceRoot: h.root, filePath: 'app.ts' })).rejects.toMatchObject(error)
+})
 it('restarts once after a transport failure', async () => {
   const h = await setup('crash-once')
   expect((await h.lsp.query(h.request)).kind).toBe('hover')

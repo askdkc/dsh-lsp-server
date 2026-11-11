@@ -7,6 +7,7 @@ import { classifyFile, supportedFileSuffixes } from '../routing/classifier.js'
 import { routeFor, type Route } from '../routing/route-table.js'
 import { hasTailwindCandidate } from '../routing/tailwind-candidate.js'
 import { resolveLaunch, initializationOptions, serverConfiguration } from '../servers/launch.js'
+import { supportsTypeScriptDiagnostics, requestTypeScriptDiagnostics } from '../servers/typescript-diagnostics.js'
 import { ServerSession } from './server-session.js'
 import { ServerPool } from './server-pool.js'
 import { throwIfAborted, withAbort } from './cancellation.js'
@@ -159,6 +160,10 @@ export class WebstackLspRuntime {
             const report = await connection.request('textDocument/diagnostic', { textDocument: { uri: source.uri } }, deadline) as { items?: unknown }
             return report?.items ?? []
           }
+          if (item.server === 'typescript' && supportsTypeScriptDiagnostics(session.capabilities)) {
+            await opened()
+            return requestTypeScriptDiagnostics(connection, source.uri, deadline)
+          }
           // Subscribe before didOpen; do not confuse a missing publication with a clean file.
           let remove = () => {}
           const published = new Promise<unknown>(resolve => {
@@ -290,8 +295,9 @@ export class WebstackLspRuntime {
     }, signal), signal, manualOpen ? session => {
       // Push notifications can omit document versions. A delayed didClose clear
       // from a previous operation is indistinguishable from a fresh clean result.
-      // Use a fresh process for push diagnostics; pull responses have request IDs.
-      return !!session.capabilities.diagnosticProvider
+      // Use a fresh process for push diagnostics; pull and tsserver diagnostic
+      // responses have request IDs and can safely reuse the session.
+      return !!session.capabilities.diagnosticProvider || (id === 'typescript' && supportsTypeScriptDiagnostics(session.capabilities))
     } : undefined)
   }
 }
