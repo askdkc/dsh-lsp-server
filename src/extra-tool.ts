@@ -1,6 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
+import type { ToolDefinition, ToolExecutionInput } from '@deepseek-ai/dsh-tools'
+import type { WorkingDirectoryService } from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from './provider.js'
 import type { WebstackLspService } from './service.js'
@@ -10,10 +11,10 @@ import { mergeCompletions } from './merge/completion.js'
 import type { CodeIntelligenceToolServiceV1, SnapshotScope } from './structure/types.js'
 
 export const name = 'lsp_extra'
-export const inject = ['tools', 'systemPrompt', 'webstackLsp', 'codeIntelligenceRuntime']
+export const inject = ['tools', 'systemPrompt', 'webstackLsp', 'codeIntelligenceRuntime', 'workingDirectory']
 export interface Config { maxDiagnostics?: number; maxCompletions?: number; maxResultChars?: number; timeoutMs?: number }
 
-export function createExtraTool(service: WebstackLspService, codeIntelligence?: CodeIntelligenceToolServiceV1, config: Config = {}): ToolDefinition {
+export function createExtraTool(service: WebstackLspService, codeIntelligence?: CodeIntelligenceToolServiceV1, config: Config = {}, workingDirectory?: Pick<WorkingDirectoryService, 'ensure'>): ToolDefinition {
   const limits = { maxDiagnostics: 200, maxCompletions: 100, maxResultChars: 32000, timeoutMs: 60000, ...config }
   for (const [key, value] of Object.entries(limits)) if (!Number.isSafeInteger(value) || value < 1 || value > 2147483647) throw new TypeError(`${key} must be a positive integer no greater than 2147483647`)
   return defineTool({
@@ -48,16 +49,16 @@ export function createExtraTool(service: WebstackLspService, codeIntelligence?: 
         if (args.operation === 'snapshot') {
           if (args.action === 'capabilities') result = codeIntelligence.capabilities()
           else if (args.action === 'open') {
-            const scope = snapshotScope(exec.agent)
+            const scope = snapshotScope(exec.agent, await resolveWorkspace(workingDirectory, exec.agent, signal))
             if (typeof args.file_path !== 'string') throw new TypeError('file_path is required for snapshot open')
             result = await codeIntelligence.snapshot.open(scope, args.file_path, signal)
           } else if (args.action === 'release') {
-            const scope = snapshotScope(exec.agent)
+            const scope = snapshotScope(exec.agent, await resolveWorkspace(workingDirectory, exec.agent, signal))
             if (typeof args.handle !== 'string') throw new TypeError('handle is required for snapshot release')
             result = await codeIntelligence.snapshot.release(scope, args.handle)
           } else throw new TypeError('snapshot action must be open, release, or capabilities')
         } else {
-          const scope = snapshotScope(exec.agent)
+          const scope = snapshotScope(exec.agent, await resolveWorkspace(workingDirectory, exec.agent, signal))
           if (args.operation === 'structure') {
           if (args.action === 'outline') {
             const range = readRange(args)
@@ -83,8 +84,7 @@ export function createExtraTool(service: WebstackLspService, codeIntelligence?: 
         }
       }
       else {
-        const workspaceRoot = exec.agent?.session.header.cwd
-        if (!workspaceRoot) throw new WebstackLspError('LSP_WORKSPACE_REQUIRED', 'lsp_extra requires a session workspace cwd')
+        const workspaceRoot = await resolveWorkspace(workingDirectory, exec.agent, signal)
         if (!args.file_path) throw new TypeError('file_path is required')
         if (args.operation === 'diagnostics') {
           const diagnostics = await service.diagnostics({ workspaceRoot, filePath: args.file_path, ...(args.severity ? { severity: args.severity } : {}), ...(args.servers ? { servers: args.servers } : {}) }, signal)
@@ -102,17 +102,22 @@ export function createExtraTool(service: WebstackLspService, codeIntelligence?: 
 }
 
 export function apply(ctx: Context, config: Config = {}): void {
-  const tool = createExtraTool(ctx.webstackLsp, ctx.codeIntelligenceRuntime, config)
+  const tool = createExtraTool(ctx.webstackLsp, ctx.codeIntelligenceRuntime, config, ctx.workingDirectory)
   ctx.tools.register(tool)
   ctx.systemPrompt.section({ name: 'tool:lsp_extra', order: 500, text: 'Use lsp_extra diagnostics after editing supported code files (PHP/Blade, TypeScript/JavaScript, JSX/TSX, Svelte, HTML, CSS/PCSS). Check status for supportedFileSuffixes, code-intelligence parser capabilities and server availability when uncertain. For Markdown and other unsupported documents, use content/structure checks instead. Open a snapshot before structure or semantic queries, pass its handle, and release it when finished. Structure/semantic positions and ranges are zero-based UTF-16; completion cursors remain one-based UTF-16. A skipped query is unverified, never a clean result; do not repeat an unsupported query unchanged. Query IDs are registered and cannot contain arbitrary Tree-sitter queries. The tool never applies edits.' })
 }
 
-function snapshotScope(agent: unknown): SnapshotScope {
+async function resolveWorkspace(workingDirectory: Pick<WorkingDirectoryService, 'ensure'> | undefined, agent: ToolExecutionInput['agent'], signal: AbortSignal): Promise<string> {
+  if (!agent || !workingDirectory) throw new WebstackLspError('LSP_WORKSPACE_REQUIRED', 'lsp_extra requires an active session and the workingDirectory service')
+  return workingDirectory.ensure(agent, signal)
+}
+
+function snapshotScope(agent: unknown, workspaceRoot: string): SnapshotScope {
   if (typeof agent !== 'object' || agent === null) throw new WebstackLspError('LSP_WORKSPACE_REQUIRED', 'snapshot operations require an active agent session')
-  const value = agent as { id?: unknown; session?: { id?: unknown; header?: { cwd?: unknown } } }
-  if (typeof value.id !== 'string' || typeof value.session?.id !== 'string' || typeof value.session.header?.cwd !== 'string')
+  const value = agent as { id?: unknown; session?: { id?: unknown } }
+  if (typeof value.id !== 'string' || typeof value.session?.id !== 'string')
     throw new WebstackLspError('LSP_WORKSPACE_REQUIRED', 'snapshot operations require trusted owner, session and workspace identity')
-  return { ownerId: value.id, sessionId: value.session.id, workspaceRoot: value.session.header.cwd }
+  return { ownerId: value.id, sessionId: value.session.id, workspaceRoot }
 }
 
 function requiredString(value: unknown, name: string): string {

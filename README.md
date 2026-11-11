@@ -20,8 +20,8 @@ extensions, ABI versions, and current availability.
 
 ## Requirements
 
-- Node.js 22.19+ (22.x) or 24+
-- DSH providing the `fs`, `subprocess`, `tools`, and `systemPrompt` services
+- Node.js 24.9+
+- DSH `0.2.2-rc.1`, providing `fs`, `subprocess`, `tools`, `systemPrompt`, and `workingDirectory`, with a tool executor registered
 - PHPantom for PHP/Blade support (`phpantom_lsp` must be in `PATH`)
 
 This plugin imposes no DSH version range at startup: imports and initialization report actual failures. This does not guarantee compatibility with every future DSH API.

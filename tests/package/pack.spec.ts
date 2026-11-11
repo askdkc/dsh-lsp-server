@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 const exec = promisify(execFile)
-it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s admission and executes LSP queries', async hostVersion => {
+it.each(['0.2.2-rc.1'])('loads the packed bundle through DSH %s admission and executes LSP queries', async hostVersion => {
   const root = await mkdtemp(join(tmpdir(), 'webstack-package-'))
   try {
     const manifest = JSON.parse(await readFile('package.json', 'utf8'))
@@ -24,21 +24,22 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
       '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-system-prompt', '@deepseek-ai/dsh-scope', '@deepseek-ai/dsh-session',
       '@deepseek-ai/dsh-session-projection', '@deepseek-ai/dsh-sandbox', '@deepseek-ai/dsh-sandbox-policy',
       '@deepseek-ai/dsh-ptc-runtime', '@deepseek-ai/dsh-user-approval',
+      '@deepseek-ai/dsh-working-directory', '@deepseek-ai/dsh-tool-executor-native',
+      '@deepseek-ai/dsh-workspace', '@deepseek-ai/dsh-typert-protocol',
     ]
     const dependencies = Object.fromEntries(await Promise.all(hostPackages.map(async name => {
       const host = JSON.parse(await readFile(join('node_modules', name, 'package.json'), 'utf8'))
       return [name, name.startsWith('@deepseek-ai/dsh-') ? hostVersion : host.version]
     })))
     // Use the official preflight and its matching Cordis runtime, not a copied evaluator.
-    const alpha = hostVersion === '0.2.1-alpha.1'
     Object.assign(dependencies, {
       '@deepseek-ai/dsh-app-boot': hostVersion,
       '@deepseek-ai/dsh-home-paths': hostVersion,
       '@deepseek-ai/dsh-launch-environment': hostVersion,
-      '@deepseek-ai/cordis': alpha ? '4.0.5-alpha.1' : '4.0.4',
-      '@deepseek-ai/cordis-plugin-group': alpha ? '1.0.5-alpha.1' : '1.0.4',
-      '@deepseek-ai/cordis-plugin-loader': alpha ? '1.0.6-alpha.1' : '1.0.5',
-      '@deepseek-ai/cordis-plugin-include': alpha ? '1.0.10-alpha.1' : '1.0.9',
+      '@deepseek-ai/cordis': '4.1.0',
+      '@deepseek-ai/cordis-plugin-group': '1.1.0',
+      '@deepseek-ai/cordis-plugin-loader': '1.1.0',
+      '@deepseek-ai/cordis-plugin-include': '1.1.0',
     })
     await writeFile(join(root, 'package.json'), JSON.stringify({
       private: true, type: 'module', packageManager: manifest.packageManager,
@@ -89,7 +90,7 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
     expect(plugins).toHaveLength(4)
     await writeFile(join(root, 'smoke.mjs'), `
       import assert from 'node:assert/strict';
-      import { readFile } from 'node:fs/promises';
+      import { readFile, mkdir, writeFile } from 'node:fs/promises';
       import { pathToFileURL } from 'node:url';
       import { evaluatePluginCompatibility, loadProfileDirectory, composeEntries, prepareProfileEntries } from '@deepseek-ai/dsh-app-boot';
       import { Context } from '@deepseek-ai/cordis';
@@ -97,6 +98,10 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
       import * as standard from '${manifest.name}/tool-lsp';
       import Tools from '@deepseek-ai/dsh-tools';
       import Prompt from '@deepseek-ai/dsh-system-prompt';
+      import * as NativeExecutor from '@deepseek-ai/dsh-tool-executor-native';
+      import WorkingDirectory from '@deepseek-ai/dsh-working-directory';
+      import SessionProjections from '@deepseek-ai/dsh-session-projection';
+      import Sessions from '@deepseek-ai/dsh-session';
       import Fs from '@deepseek-ai/dsh-fs-local';
       import Subprocess from '@deepseek-ai/dsh-subprocess-local';
       import * as provider from '${manifest.name}/provider';
@@ -182,13 +187,33 @@ it.each(['0.2.0-rc.2', '0.2.1-alpha.1'])('loads the packed bundle through DSH %s
         const html = await ctx.get('webstackLsp').completion({workspaceRoot:process.cwd(),filePath:'index.html',position:{line:0,character:1}});
         const css = await ctx.get('webstackLsp').completion({workspaceRoot:process.cwd(),filePath:'style.css',position:{line:0,character:7}});
         await ctx.plugin(Prompt, {}); await ctx.plugin(Tools, {});
+        await ctx.plugin(NativeExecutor); await ctx.plugin(Sessions); await ctx.plugin(SessionProjections);
+        await ctx.plugin(WorkingDirectory, {defaultDirectory:process.cwd()});
         assert.throws(() => standard.apply(ctx, {maxLocations:200, maxResultChars:32000, timeoutMs:0}), /tool-lsp: timeoutMs/);
         await ctx.plugin(standard, {}); await ctx.plugin(extra, {});
         if (!ctx.get('tools').get('lsp') || !ctx.get('tools').get('lsp_extra')) throw new Error('missing bundled tools');
         const guidance = (await ctx.get('systemPrompt').assemble()).sections.find(section => section.name === 'tool:lsp_extra').text;
         assert.ok(guidance.includes('after editing supported code files'));
         assert.ok(guidance.includes('For Markdown and other unsupported documents'));
-        const skipped = await ctx.get('tools').execute({callId:'packed-md',name:'lsp_extra',arguments:{operation:'diagnostics',file_path:'PLAN.md',severity:'all'},signal:new AbortController().signal,agent:{session:{header:{cwd:process.cwd()}}}});
+        const agent = {id:'packed-agent',ctx,inject() {},session:ctx.sessions.create('packed-session', {meta:{cwd:process.cwd()}})};
+        const call = async (name, args) => (await ctx.tools.execute({calls:[{type:'tool-call',id:'packed-call',name,arguments:JSON.stringify(args)}],signal:new AbortController().signal,agent})).results[0].result;
+        const nativeHover = await call('lsp', {operation:'hover',file_path:'app.ts',line:2,character:14});
+        assert.equal(nativeHover.isError, false);
+        assert.ok(JSON.stringify(nativeHover).includes('string'));
+        await mkdir('moved');
+        await writeFile('moved/app.ts', 'const movedValue: number = "wrong";');
+        await ctx.workingDirectory.set(agent, 'moved');
+        const movedDiagnostics = await call('lsp_extra', {operation:'diagnostics',file_path:'app.ts',severity:'error'});
+        assert.equal(movedDiagnostics.isError, false);
+        assert.ok(JSON.stringify(movedDiagnostics).includes('not assignable'));
+        const movedSnapshot = await call('lsp_extra', {operation:'snapshot',action:'open',file_path:'app.ts'});
+        assert.equal(movedSnapshot.isError, false);
+        const outline = await call('lsp_extra', {operation:'structure',action:'outline',handle:movedSnapshot.value.handle});
+        assert.equal(outline.isError, false);
+        assert.ok(JSON.stringify(outline).includes('movedValue'));
+        assert.equal((await call('lsp_extra', {operation:'snapshot',action:'release',handle:movedSnapshot.value.handle})).value.released, true);
+        await ctx.workingDirectory.set(agent, process.cwd());
+        const skipped = await call('lsp_extra', {operation:'diagnostics',file_path:'PLAN.md',severity:'all'});
         assert.equal(skipped.isError, false);
         assert.ok(JSON.stringify(skipped).includes('unsupported_file_type'));
         if (extra.name !== 'lsp_extra' || result.kind !== 'hover' || !result.hover?.contents.includes('string')) throw new Error('bad packed provider');

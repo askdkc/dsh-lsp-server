@@ -26,9 +26,9 @@ pnpm dsh plugin --profile web list @askdkc/dsh-lsp-server --depth 0
 
 pnpm may warn about missing DSH peer packages because the profile has peer auto-installation disabled. DSH resolves those host services from its own installation; do not add duplicate host packages to the profile just to silence pnpm. Older releases with exact host peers may still be skipped; install the updated release to remove that version gate.
 
-The bundle adds `lsp`, `lsp-webstack-provider`, `tool-lsp`, and `tool-lsp-extra` rows. Its `@deepseek-ai/dsh-lsp` and `@deepseek-ai/dsh-tool-lsp` dependencies are installed automatically; do not install them separately. The harness still provides the profile's `fs`, `subprocess`, `tools`, and `systemPrompt` services and the shared Cordis instance. Installing this package does not install the harness itself.
+The bundle adds `lsp`, `lsp-webstack-provider`, `tool-lsp`, and `tool-lsp-extra` rows. Its `@deepseek-ai/dsh-lsp` and `@deepseek-ai/dsh-tool-lsp` dependencies are installed automatically; do not install them separately. The harness still provides the profile's `fs`, `subprocess`, `tools`, `systemPrompt`, and `workingDirectory` services and the shared Cordis instance. Installing this package does not install the harness itself.
 
-The four DSH host peers use `*`, including prereleases in DSH's compatibility evaluator. All four bundle rows resolve through this package's own entry points; `/lsp` and `/tool-lsp` re-export the upstream implementations without catching import or initialization errors. The LSP dependencies and development host packages remain pinned to `0.2.0-rc.2` for reproducible builds and tests; those pins do not restrict the host version at startup. Future API compatibility is not guaranteed.
+The five DSH host peers use `*`, including prereleases in DSH's compatibility evaluator. All four bundle rows resolve through this package's own entry points; `/lsp` and `/tool-lsp` re-export the upstream implementations without catching import or initialization errors. The LSP dependencies and development host packages are pinned to `0.2.2-rc.1` for reproducible builds and tests; those pins do not restrict the host version at startup. Cordis and Schemastery follow the current host (`~4.1.0` and `~3.19.0`). Node.js 24.9+ and a registered tool executor are required. Older DSH runtimes are no longer covered by this release; future API compatibility is not guaranteed.
 
 DSH may stop `plugin add` with `ERR_PNPM_IGNORED_BUILDS` for `core-js`, a dependency of the bundled HTML/CSS server. Decide whether to allow its build script in DSH's plugin manager. To **deny** the script from the CLI, set `allowBuilds.core-js: false` in the selected profile's `pnpm-workspace.yaml` before adding this bundle:
 
@@ -62,7 +62,7 @@ Additional tool calls:
 {"operation":"completion","file_path":"src/app.ts","line":12,"character":8}
 ```
 
-Both tools obtain the workspace from the **calling session**. Completion's line and character are **one-based UTF-16**; diagnostic/output ranges are **zero-based UTF-16**. The model cannot supply a different workspace root. The underlying service API uses zero-based positions.
+Both tools obtain the effective workspace from DSH’s **workingDirectory service for the calling session**, including directory changes and recovery when the current directory disappears. Snapshot handles remain scoped to their owner, session, and workspace; they cannot be used from a different current workspace. Completion's line and character are **one-based UTF-16**; diagnostic/output ranges are **zero-based UTF-16**. The model cannot supply a different workspace root. The underlying service API uses zero-based positions.
 
 Diagnostics on existing unsupported documents such as `PLAN.md` return `{"diagnostics":[],"skipped":{"reason":"unsupported_file_type","filePath":"PLAN.md"}}`. This means no static check was performed; use document content and structure checks instead. Missing files, workspace escapes, read-limit failures, and failures from a supported primary server remain errors. `status.supportedFileSuffixes` describes routing support, while `servers` separately describes enabled/available servers.
 
@@ -123,9 +123,11 @@ pnpm test:e2e              # real TS/JS, HTML, CSS, Svelte, Tailwind v3/v4
 PHPANTOM_E2E=1 pnpm test:e2e # additionally tests installed PHPantom with PHP and Blade
 ```
 
-The packed-artifact test installs the archive into a fresh consumer with DSH's hoisted layout, peer auto-installation disabled, and dependency scripts disabled. It provides the host service packages but does not preinstall either LSP package, then verifies official profile composition and preflight, bundle imports, both tool registrations, and real TypeScript, HTML, and CSS queries on DSH `0.2.0-rc.2` and `0.2.1-alpha.1`. It also checks that import and initialization errors retain their original cause. It also checks declaration paths and the executable doctor. The consumer install prefers cached packages but needs registry access for uncached packages or metadata. E2E needs working OS file watchers; sandboxed macOS watchers may fail with `EMFILE`.
+The packed-artifact test installs the archive into a fresh consumer with DSH's hoisted layout, peer auto-installation disabled, and dependency scripts disabled. It provides the host service packages but does not preinstall either LSP package, then verifies official profile composition and preflight, bundle imports, both tool registrations, and real TypeScript, HTML, and CSS queries on DSH `0.2.2-rc.1` through its native tool executor. It also checks that import and initialization errors retain their original cause. It also checks declaration paths and the executable doctor. The consumer install prefers cached packages but needs registry access for uncached packages or metadata. E2E needs working OS file watchers; sandboxed macOS watchers may fail with `EMFILE`.
 
 Integration tests run against the published DSH service/tool packages and Cordis versions recorded in the lockfile. The packed consumers use the published DSH runtimes named above. Future versions (`0.3.0-alpha.1` and `1.0.0`) are simulated only as version inputs to the official compatibility evaluator, not tested APIs. The full Web UI and a source-built upstream application are not exercised here.
+
+Repository overrides retain patched Undici 8.12.3 and Zod 4.6.7 for local development and CI. Dependency overrides do not propagate from an installed plugin into its host; the packed-consumer test uses the official host dependency versions without these overrides.
 
 ### Dependency security
 

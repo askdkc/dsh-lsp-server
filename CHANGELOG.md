@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Update bundled LSP packages and development services to DSH `0.2.2-rc.1`, Cordis 4.1, and Schemastery 3.19; require Node.js 24.9+.
+- Preserve patched Undici 8.12.3 and Zod 4.6.7 in this repository’s dependency resolution when upstream pins older versions.
+- Follow DSH’s effective session working directory for diagnostics, completion, snapshots, structure, and semantic queries, including directory recovery.
+- Exercise the current native tool executor, working-directory changes, and packed bundle against DSH `0.2.2-rc.1`; older host versions are no longer covered.
+
 - Expand bundled Tree-sitter structure support from 4 grammars to 21: Bash, C, C#, C++, CSS, Go, Haskell,
   HTML, Java, JSON, Julia, OCaml, OCaml interface, Python, QL DBScheme, Ruby, Rust, and Scala, alongside the
   existing JavaScript, TypeScript, TSX, and PHP. Each grammar is pinned by version, upstream commit, ABI, and
