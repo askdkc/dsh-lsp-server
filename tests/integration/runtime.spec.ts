@@ -7,12 +7,12 @@ import { harness } from '../fixtures/harness.js'
 const fixture = fileURLToPath(new URL('../fixtures/protocol-server.mjs', import.meta.url))
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn() })
-async function setup(mode = 'normal') {
+async function setup(mode = 'normal', diagnosticsMs = 2500) {
   const root = await mkdtemp(join(tmpdir(), 'webstack-runtime-'))
   cleanup.push(() => rm(root, { recursive: true, force: true }))
   await writeFile(join(root, 'app.ts'), 'const value = 1')
   const trace = join(root, 'trace.jsonl')
-  const h = await harness(root, { servers: { phpantom: { enabled: false }, typescript: { mode: 'path', command: process.execPath, args: [fixture, mode, trace], env: { WEBSTACK_TEST_MARKER: 'forwarded' }, configuration: { test: { value: 42 } } } }, tailwind: { enabled: false }, timeouts: { primaryHoverMs: 1000, diagnosticsMs: 500, shutdownMs: 100, killGraceMs: 100 } })
+  const h = await harness(root, { servers: { phpantom: { enabled: false }, typescript: { mode: 'path', command: process.execPath, args: [fixture, mode, trace], env: { WEBSTACK_TEST_MARKER: 'forwarded' }, configuration: { test: { value: 42 } } } }, tailwind: { enabled: false }, timeouts: { primaryHoverMs: 1000, diagnosticsMs, shutdownMs: 100, killGraceMs: 100 } })
   cleanup.push(h.dispose)
   return { ...h, root, trace, request: { workspaceRoot: root, filePath: 'app.ts', position: {line:0,character:6}, operation: 'hover' as const } }
 }
@@ -103,7 +103,7 @@ it('cancels queued work promptly and terminates a server ignoring cancellation',
 it('bounds a stuck initialize and does not report absent diagnostics as clean', async () => {
   const h = await setup('hang-init')
   await expect(h.lsp.query(h.request)).rejects.toMatchObject({name:'AbortError'})
-  const h2 = await setup('no-diagnostics')
+  const h2 = await setup('no-diagnostics', 500)
   await expect(h2.extra.diagnostics({workspaceRoot:h2.root,filePath:'app.ts'})).rejects.toMatchObject({name:'TimeoutError'})
 }, 5000)
 it('does not mistake a previous document close for fresh push diagnostics', async () => {
@@ -146,7 +146,13 @@ it.each([
   ['typescript-hang', { name: 'TimeoutError' }],
 ] as const)('does not report failed TypeScript diagnostics as clean: %s', async (mode, error) => {
   const h = await setup(mode)
-  await expect(h.extra.diagnostics({ workspaceRoot: h.root, filePath: 'app.ts' })).rejects.toMatchObject(error)
+  // Start the fixture before measuring the diagnostic request deadline.
+  await h.lsp.query(h.request)
+  await expect(h.extra.diagnostics({
+    workspaceRoot: h.root,
+    filePath: 'app.ts',
+    ...(mode === 'typescript-hang' ? { timeoutMs: 500 } : {}),
+  })).rejects.toMatchObject(error)
 })
 it('restarts once after a transport failure', async () => {
   const h = await setup('crash-once')
