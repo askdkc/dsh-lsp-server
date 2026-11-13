@@ -4,7 +4,7 @@ import type { ResolvedConfig } from './config.js'
 export interface LspPosition { line: number; character: number }
 export interface LspRange { start: LspPosition; end: LspPosition }
 
-export interface DiagnosticsRequest { workspaceRoot: string; filePath: string; severity?: 'all' | 'error' | 'warning'; servers?: string[] }
+export interface DiagnosticsRequest { timeoutMs?: number; workspaceRoot: string; filePath: string; severity?: 'all' | 'error' | 'warning'; servers?: string[] }
 export interface CompletionRequest { workspaceRoot: string; filePath: string; position: LspPosition; triggerKind?: 1 | 2 | 3; triggerCharacter?: string }
 
 export interface NormalizedDiagnostic {
@@ -22,8 +22,9 @@ export interface NormalizedCompletionItem { server: string; label: string; kind?
 export type NavigationResult =
   | { kind: 'locations'; locations: ReadonlyArray<{ uri: string; range: LspRange }>; resolvedWorkspaceUri: string; truncated?: boolean; omitted?: number }
   | { kind: 'hover'; hover: { contents: string; range?: LspRange } | null }
-/** A skipped diagnostic query is unverified; an empty diagnostics array alone is not evidence of a clean file. */
-export interface DiagnosticsResult { skipped?: { reason: 'unsupported_file_type'; filePath: string }; diagnostics: NormalizedDiagnostic[]; omittedServers?: string[]; truncated?: { diagnostics: number; characters: number } }
+export interface DiagnosticOmission { server: string; reason: 'timeout' | 'unavailable' | 'error' | 'cooldown' | 'in_progress'; retryAfterMs?: number }
+/** Skipped or omitted diagnostics are unverified; an empty array alone is not evidence of a clean file. */
+export interface DiagnosticsResult { skipped?: { reason: 'unsupported_file_type'; filePath: string }; diagnostics: NormalizedDiagnostic[]; omittedServers?: string[]; omissions?: DiagnosticOmission[]; truncated?: { diagnostics: number; characters: number } }
 export interface CompletionResult { items: NormalizedCompletionItem[]; truncated?: { items: number; characters: number } }
 
 export interface WebstackLspStatus {
@@ -51,6 +52,7 @@ export function createWebstackLspService(runtime: ExtendedRuntime, config: Pick<
 
 function validateDiagnosticsRequest(request: DiagnosticsRequest): DiagnosticsRequest {
   if (!isRequest(request) || typeof request.workspaceRoot !== 'string' || request.workspaceRoot.length === 0 || typeof request.filePath !== 'string' || request.filePath.length === 0) throw new WebstackLspError('LSP_WORKSPACE_REQUIRED', 'workspaceRoot and filePath are required')
+  if (request.timeoutMs !== undefined && (!Number.isSafeInteger(request.timeoutMs) || request.timeoutMs < 1 || request.timeoutMs > 2147483647)) throw new TypeError('timeoutMs must be a positive bounded integer')
   return { ...request, ...(request.servers ? { servers: [...request.servers] } : {}) }
 }
 

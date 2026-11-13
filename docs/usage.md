@@ -150,3 +150,60 @@ The pinned `svelte-language-server` still declares Svelte 4 as its dependency. R
 For pnpm 9, use `"svelte-language-server>svelte": "5.55.7"` in the installation root's `pnpm.overrides`, reinstall, and run `pnpm audit`. See [npm's root-only override rules](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#overrides). The language server can also load a project's own Svelte compiler; project dependencies need separate updates. A clean repository audit does not establish that installed consumers or projects are clean.
 
 The provider reads current documents through `ctx.fs`, confines sources to the canonical workspace, and starts/cleans up processes through `ctx.subprocess`. It refuses `workspace/applyEdit` and never applies completion edits. Language servers themselves may read project dependencies, evaluate framework configuration, and write caches; this plugin is not an OS sandbox.
+
+### Diagnostic deadlines and partial results
+
+Primary diagnostics have a default 60,000ms budget (`timeouts.diagnosticsMs`).
+Auxiliary diagnostics have an independent 8,000ms budget
+(`timeouts.auxiliaryDiagnosticsMs`), capped at 80% of the overall diagnostic
+budget. Both run concurrently. Process shutdown continues under the pool's
+serialization guard without delaying the diagnostic result.
+
+`lsp_extra` defaults to 65,000ms. For custom tool deadlines it passes the
+remaining budget to diagnostics, reserving the smaller of 1,000ms or 10% of the
+tool deadline for result delivery. This also applies to snapshot semantic
+diagnostics. Service callers can supply `DiagnosticsRequest.timeoutMs` to
+shorten the configured budget.
+
+Under the default `missingServerPolicy: warn`, auxiliary failure preserves
+completed primary diagnostics and returns both the existing `omittedServers`
+string array and an additive `omissions` array:
+
+```json
+{"diagnostics":[],"omittedServers":["tailwind"],"omissions":[{"server":"tailwind","reason":"timeout","retryAfterMs":30000}]}
+```
+
+This is incomplete verification, **not a clean file**. Reasons are `timeout`,
+`unavailable`, `error`, `cooldown`, or `in_progress`. After an auxiliary failure,
+other files in the same workspace skip that server for
+`timeouts.diagnosticsRetryMs` (default 30,000ms). The next query after that
+interval probes it again; a successful response clears the failure state.
+Concurrent queries do not queue duplicate auxiliary probes. No stale diagnostics
+are substituted. Stop remains `AbortError` and does not start a cooldown.
+Primary diagnostic timeouts and strict-policy auxiliary timeouts throw
+`TimeoutError`; other primary failures remain errors.
+
+### Consumer compatibility tests
+
+`npm run test:package` resolves each host package from its published `latest`
+tag (falling back to `next`, `rc`, or `alpha` only when `latest` is absent),
+then verifies a frozen reinstall of the generated consumer lockfile.
+`DSH_CONSUMER_TAGS` accepts a JSON map of package names to preferred tags for
+hosts that use different release channels per package. The repository's own installation still
+uses `pnpm install --frozen-lockfile` in CI.
+
+To additionally test the DSH configuration actually installed on a machine:
+
+```sh
+DSH_CONSUMER_ROOT="$HOME/.dsh/profiles/dsh-cli" npm run test:package:current
+```
+
+The root must be a complete installed host/profile. Each required package's
+actual installed version is resolved independently, including parent-hoisted
+packages and packages that hide their manifest export. No common DSH version
+or published tag is substituted for an installed version. The exact versions are recorded in test
+output, then installed in the isolated consumer before the same admission and
+real tool-execution checks run. Missing packages fail explicitly, including the
+versions resolved so far. Set `DSH_CONSUMER_ROOT` with `npm run test:package` to
+run both consumers. `DSH_CONSUMER_OFFLINE=1` requires an already populated pnpm
+store; it does not skip installation or smoke tests.

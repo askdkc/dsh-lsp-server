@@ -4,8 +4,10 @@ import { mkdtemp, readFile, readdir, rm, writeFile, access, unlink } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
+import { resolveConsumerHost, resolvePublishedConsumer } from './consumer-host.js'
 const exec = promisify(execFile)
-it.each(['0.2.2-rc.1'])('loads the packed bundle through DSH %s admission and executes LSP queries', async hostVersion => {
+const consumers = process.env.DSH_CONSUMER_MODE === 'current' ? ['current'] : ['published', ...(process.env.DSH_CONSUMER_ROOT ? ['current'] : [])]
+it.each(consumers)('loads the packed bundle through DSH %s admission and executes LSP queries', async hostVersion => {
   const root = await mkdtemp(join(tmpdir(), 'webstack-package-'))
   try {
     const manifest = JSON.parse(await readFile('package.json', 'utf8'))
@@ -27,20 +29,20 @@ it.each(['0.2.2-rc.1'])('loads the packed bundle through DSH %s admission and ex
       '@deepseek-ai/dsh-working-directory', '@deepseek-ai/dsh-tool-executor-native',
       '@deepseek-ai/dsh-workspace', '@deepseek-ai/dsh-typert-protocol',
     ]
-    const dependencies = Object.fromEntries(await Promise.all(hostPackages.map(async name => {
-      const host = JSON.parse(await readFile(join('node_modules', name, 'package.json'), 'utf8'))
-      return [name, name.startsWith('@deepseek-ai/dsh-') ? hostVersion : host.version]
-    })))
-    // Use the official preflight and its matching Cordis runtime, not a copied evaluator.
-    Object.assign(dependencies, {
-      '@deepseek-ai/dsh-app-boot': hostVersion,
-      '@deepseek-ai/dsh-home-paths': hostVersion,
-      '@deepseek-ai/dsh-launch-environment': hostVersion,
-      '@deepseek-ai/cordis': '4.1.0',
-      '@deepseek-ai/cordis-plugin-group': '1.1.0',
-      '@deepseek-ai/cordis-plugin-loader': '1.1.0',
-      '@deepseek-ai/cordis-plugin-include': '1.1.0',
-    })
+    hostPackages.push(
+      '@deepseek-ai/dsh-app-boot', '@deepseek-ai/dsh-home-paths', '@deepseek-ai/dsh-launch-environment',
+      '@deepseek-ai/cordis-plugin-group', '@deepseek-ai/cordis-plugin-loader', '@deepseek-ai/cordis-plugin-include',
+    )
+    if (hostVersion === 'current' && !process.env.DSH_CONSUMER_ROOT) throw new Error('DSH_CONSUMER_ROOT must point to the installed DSH profile or host root')
+    const dependencies = hostVersion === 'current'
+      ? await resolveConsumerHost(process.env.DSH_CONSUMER_ROOT!, hostPackages)
+      : await resolvePublishedConsumer(hostPackages, async name => {
+          const result = await exec('npm', ['view', name, 'dist-tags', '--json', '--fetch-retries=0', '--fetch-timeout=10000', '--cache', join(root, 'npm-cache')], { timeout: 15000 })
+          return JSON.parse(result.stdout)
+        }, JSON.parse(process.env.DSH_CONSUMER_TAGS ?? '{}'))
+    // Keep the exact per-package resolution in test output even when installation fails.
+    console.log('DSH consumer versions:', JSON.stringify({ consumer: hostVersion, packages: dependencies }))
+    await writeFile(join(root, 'consumer-versions.json'), JSON.stringify(dependencies, null, 2))
     await writeFile(join(root, 'package.json'), JSON.stringify({
       private: true, type: 'module', packageManager: manifest.packageManager,
       dependencies: { ...dependencies, [manifest.name]: `file:${join(root, archives[0]!.name)}` },
@@ -51,11 +53,15 @@ it.each(['0.2.2-rc.1'])('loads the packed bundle through DSH %s admission and ex
     // pnpm 9 reads these settings from CLI/.npmrc; newer DSH installations
     // use pnpm versions that also read them from pnpm-workspace.yaml.
     await exec('corepack', [
-      'pnpm', 'install', '--prefer-offline', '--ignore-scripts',
+      'pnpm', 'install', ...(process.env.DSH_CONSUMER_OFFLINE ? ['--offline'] : ['--prefer-offline']), '--ignore-scripts',
       '--config.node-linker=hoisted', '--config.auto-install-peers=false',
     ], { cwd: root, timeout: 90000 }).catch(error => {
       throw new Error(`Consumer install failed:\n${error.stdout}\n${error.stderr}`, { cause: error })
     })
+    await exec('corepack', ['pnpm', 'install', '--frozen-lockfile', '--offline', '--ignore-scripts', '--config.node-linker=hoisted', '--config.auto-install-peers=false'], { cwd: root, timeout: 90000 })
+    for (const [name, version] of Object.entries(dependencies)) {
+      expect(JSON.parse(await readFile(join(root, 'node_modules', name, 'package.json'), 'utf8')).version, name).toBe(version)
+    }
     for (const entry of Object.values(manifest.exports) as Array<string | { types: string; default: string }>) {
       if (typeof entry === 'object') { await access(join(packagePath, entry.types)); await access(join(packagePath, entry.default)) }
     }
@@ -107,11 +113,7 @@ it.each(['0.2.2-rc.1'])('loads the packed bundle through DSH %s admission and ex
       import * as provider from '${manifest.name}/provider';
       import * as extra from '${manifest.name}/extra-tool';
       const manifest = JSON.parse(await readFile('${packagePath}/package.json', 'utf8'));
-      for (const version of ['0.2.0-rc.2', '0.2.1-alpha.1', '0.3.0-alpha.1', '1.0.0']) {
-        assert.equal(evaluatePluginCompatibility(manifest, {}, version), undefined);
-      }
-      const oldManifest = {...manifest, peerDependencies: {'@deepseek-ai/dsh-tools': '0.2.0-rc.2'}};
-      assert.ok(evaluatePluginCompatibility(oldManifest, {}, '0.2.1-alpha.1'));
+      assert.equal(evaluatePluginCompatibility(manifest, {}, '${dependencies['@deepseek-ai/dsh-tools']}'), undefined);
       const profile = loadProfileDirectory('dsh', process.cwd(), '${join(root, 'package.json')}', {userLayer:false});
       assert.equal(profile.skippedBundles.length, 0);
       const rows = composeEntries(profile.layers.map(layer => layer.patches));

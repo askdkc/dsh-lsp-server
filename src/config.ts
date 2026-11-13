@@ -26,6 +26,8 @@ export interface Config {
     primaryHoverMs?: number
     auxiliaryHoverMs?: number
     diagnosticsMs?: number
+    auxiliaryDiagnosticsMs?: number
+    diagnosticsRetryMs?: number
     completionMs?: number
     shutdownMs?: number
     killGraceMs?: number
@@ -67,6 +69,8 @@ export interface ResolvedConfig {
     primaryHoverMs: number
     auxiliaryHoverMs: number
     diagnosticsMs: number
+    auxiliaryDiagnosticsMs: number
+    diagnosticsRetryMs: number
     completionMs: number
     shutdownMs: number
     killGraceMs: number
@@ -105,7 +109,7 @@ const DEFAULT_SERVER_MODES: Record<ServerId, ServerMode> = {
 
 export const SERVER_IDS: ServerId[] = ['phpantom', 'typescript', 'svelte', 'html', 'css', 'tailwind']
 const DEFAULT_LIMITS = { maxDocumentBytes: 1_048_576, maxMessageBytes: 8_388_608, maxStderrBytes: 65_536 }
-const DEFAULT_TIMEOUTS = { navigationMs: 60_000, primaryHoverMs: 30_000, auxiliaryHoverMs: 8_000, diagnosticsMs: 60_000, completionMs: 15_000, shutdownMs: 5_000, killGraceMs: 1_000 }
+const DEFAULT_TIMEOUTS = { navigationMs: 60_000, primaryHoverMs: 30_000, auxiliaryHoverMs: 8_000, diagnosticsMs: 60_000, auxiliaryDiagnosticsMs: 8_000, diagnosticsRetryMs: 30_000, completionMs: 15_000, shutdownMs: 5_000, killGraceMs: 1_000 }
 
 export const DEFAULT_CONFIG: ResolvedConfig = {
   providerId: 'webstack',
@@ -229,6 +233,8 @@ export function resolveConfig(input: unknown = {}): ResolvedConfig {
       primaryHoverMs: readPositiveInteger(timeouts.primaryHoverMs, 'timeouts.primaryHoverMs', DEFAULT_TIMEOUTS.primaryHoverMs),
       auxiliaryHoverMs: readPositiveInteger(timeouts.auxiliaryHoverMs, 'timeouts.auxiliaryHoverMs', DEFAULT_TIMEOUTS.auxiliaryHoverMs),
       diagnosticsMs: readPositiveInteger(timeouts.diagnosticsMs, 'timeouts.diagnosticsMs', DEFAULT_TIMEOUTS.diagnosticsMs),
+      auxiliaryDiagnosticsMs: readPositiveInteger(timeouts.auxiliaryDiagnosticsMs, 'timeouts.auxiliaryDiagnosticsMs', DEFAULT_TIMEOUTS.auxiliaryDiagnosticsMs),
+      diagnosticsRetryMs: readPositiveInteger(timeouts.diagnosticsRetryMs, 'timeouts.diagnosticsRetryMs', DEFAULT_TIMEOUTS.diagnosticsRetryMs),
       completionMs: readPositiveInteger(timeouts.completionMs, 'timeouts.completionMs', DEFAULT_TIMEOUTS.completionMs),
       shutdownMs: readPositiveInteger(timeouts.shutdownMs, 'timeouts.shutdownMs', DEFAULT_TIMEOUTS.shutdownMs),
       killGraceMs: readPositiveInteger(timeouts.killGraceMs, 'timeouts.killGraceMs', DEFAULT_TIMEOUTS.killGraceMs),

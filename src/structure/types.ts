@@ -84,6 +84,7 @@ export interface StructureSpanResult { status: 'ok' | 'partial'; text: string; t
 
 export type SemanticOperation = 'definition' | 'references' | 'implementation' | 'hover' | 'diagnostics' | 'completion'
 export interface SemanticQuery {
+  timeoutMs?: number
   operation: SemanticOperation
   position?: LspPosition
   severity?: 'all' | 'error' | 'warning'

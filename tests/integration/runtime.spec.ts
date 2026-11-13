@@ -104,7 +104,7 @@ it('bounds a stuck initialize and does not report absent diagnostics as clean', 
   const h = await setup('hang-init')
   await expect(h.lsp.query(h.request)).rejects.toMatchObject({name:'AbortError'})
   const h2 = await setup('no-diagnostics')
-  await expect(h2.extra.diagnostics({workspaceRoot:h2.root,filePath:'app.ts'})).rejects.toMatchObject({name:'AbortError'})
+  await expect(h2.extra.diagnostics({workspaceRoot:h2.root,filePath:'app.ts'})).rejects.toMatchObject({name:'TimeoutError'})
 }, 5000)
 it('does not mistake a previous document close for fresh push diagnostics', async () => {
   const h = await setup('late-close-diagnostics')
@@ -143,7 +143,7 @@ it.each([
   ['typescript-malformed', { code: 'LSP_MALFORMED_RESPONSE' }],
   ['typescript-malformed-item', { code: 'LSP_MALFORMED_RESPONSE' }],
   ['typescript-error', { message: '-32603: diagnostic failure' }],
-  ['typescript-hang', { name: 'AbortError' }],
+  ['typescript-hang', { name: 'TimeoutError' }],
 ] as const)('does not report failed TypeScript diagnostics as clean: %s', async (mode, error) => {
   const h = await setup(mode)
   await expect(h.extra.diagnostics({ workspaceRoot: h.root, filePath: 'app.ts' })).rejects.toMatchObject(error)

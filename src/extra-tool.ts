@@ -15,7 +15,7 @@ export const inject = ['tools', 'systemPrompt', 'webstackLsp', 'codeIntelligence
 export interface Config { maxDiagnostics?: number; maxCompletions?: number; maxResultChars?: number; timeoutMs?: number }
 
 export function createExtraTool(service: WebstackLspService, codeIntelligence?: CodeIntelligenceToolServiceV1, config: Config = {}, workingDirectory?: Pick<WorkingDirectoryService, 'ensure'>): ToolDefinition {
-  const limits = { maxDiagnostics: 200, maxCompletions: 100, maxResultChars: 32000, timeoutMs: 60000, ...config }
+  const limits = { maxDiagnostics: 200, maxCompletions: 100, maxResultChars: 32000, timeoutMs: 65000, ...config }
   for (const [key, value] of Object.entries(limits)) if (!Number.isSafeInteger(value) || value < 1 || value > 2147483647) throw new TypeError(`${key} must be a positive integer no greater than 2147483647`)
   return defineTool({
     name,
@@ -40,6 +40,9 @@ export function createExtraTool(service: WebstackLspService, codeIntelligence?: 
     },
     timeoutMs: limits.timeoutMs,
     async execute(args, exec) {
+      const started = performance.now()
+      // Leave time for snapshot freshness checks, result formatting and host delivery.
+      const diagnosticBudget = () => Math.max(1, Math.floor(limits.timeoutMs - Math.min(1000, limits.timeoutMs * 0.1) - (performance.now() - started)))
       const signal = AbortSignal.any([exec.signal, AbortSignal.timeout(limits.timeoutMs)])
       signal.throwIfAborted()
       let result: unknown
@@ -75,6 +78,7 @@ export function createExtraTool(service: WebstackLspService, codeIntelligence?: 
           const action = args.action
           if (!['definition', 'references', 'implementation', 'hover', 'diagnostics', 'completion'].includes(String(action))) throw new TypeError('unsupported semantic action')
           result = await codeIntelligence.semantic.query(scope, requiredString(args.handle, 'handle'), {
+            ...(action === 'diagnostics' ? { timeoutMs: diagnosticBudget() } : {}),
             operation: action as 'definition' | 'references' | 'implementation' | 'hover' | 'diagnostics' | 'completion',
             ...(action === 'diagnostics' ? {} : { position: zeroBasedPosition(args) }),
             ...(args.severity ? { severity: args.severity as 'all' | 'error' | 'warning' } : {}),
@@ -87,7 +91,7 @@ export function createExtraTool(service: WebstackLspService, codeIntelligence?: 
         const workspaceRoot = await resolveWorkspace(workingDirectory, exec.agent, signal)
         if (!args.file_path) throw new TypeError('file_path is required')
         if (args.operation === 'diagnostics') {
-          const diagnostics = await service.diagnostics({ workspaceRoot, filePath: args.file_path, ...(args.severity ? { severity: args.severity } : {}), ...(args.servers ? { servers: args.servers } : {}) }, signal)
+          const diagnostics = await service.diagnostics({ timeoutMs: diagnosticBudget(), workspaceRoot, filePath: args.file_path, ...(args.severity ? { severity: args.severity } : {}), ...(args.servers ? { servers: args.servers } : {}) }, signal)
           result = { ...diagnostics, ...mergeDiagnostics([diagnostics.diagnostics], limits) }
         } else {
           if (!args.line || args.line < 1 || !args.character || args.character < 1) throw new TypeError('completion requires positive one-based line and character')
@@ -104,7 +108,7 @@ export function createExtraTool(service: WebstackLspService, codeIntelligence?: 
 export function apply(ctx: Context, config: Config = {}): void {
   const tool = createExtraTool(ctx.webstackLsp, ctx.codeIntelligenceRuntime, config, ctx.workingDirectory)
   ctx.tools.register(tool)
-  ctx.systemPrompt.section({ name: 'tool:lsp_extra', order: 500, text: 'Use lsp_extra diagnostics after editing supported code files (PHP/Blade, TypeScript/JavaScript, JSX/TSX, Svelte, HTML, CSS/PCSS). Check status for supportedFileSuffixes, code-intelligence parser capabilities and server availability when uncertain. For Markdown and other unsupported documents, use content/structure checks instead. Open a snapshot before structure or semantic queries, pass its handle, and release it when finished. Structure/semantic positions and ranges are zero-based UTF-16; completion cursors remain one-based UTF-16. A skipped query is unverified, never a clean result; do not repeat an unsupported query unchanged. Query IDs are registered and cannot contain arbitrary Tree-sitter queries. The tool never applies edits.' })
+  ctx.systemPrompt.section({ name: 'tool:lsp_extra', order: 500, text: 'Use lsp_extra diagnostics after editing supported code files (PHP/Blade, TypeScript/JavaScript, JSX/TSX, Svelte, HTML, CSS/PCSS). Check status for supportedFileSuffixes, code-intelligence parser capabilities and server availability when uncertain. For Markdown and other unsupported documents, use content/structure checks instead. Open a snapshot before structure or semantic queries, pass its handle, and release it when finished. Structure/semantic positions and ranges are zero-based UTF-16; completion cursors remain one-based UTF-16. A skipped query is unverified, never a clean result; omittedServers/omissions mean incomplete diagnostics, never a clean result; do not repeat an unsupported query unchanged. Query IDs are registered and cannot contain arbitrary Tree-sitter queries. The tool never applies edits.' })
 }
 
 async function resolveWorkspace(workingDirectory: Pick<WorkingDirectoryService, 'ensure'> | undefined, agent: ToolExecutionInput['agent'], signal: AbortSignal): Promise<string> {

@@ -23,3 +23,20 @@ it.each(['v3', 'v4'])('Tailwind %s: completion and hover alongside HTML', async 
     expect(completion.items.some(item => item.server === 'tailwind' && item.label === 'flex')).toBe(true)
   } finally { await h.dispose(); await rm(root, { recursive: true, force: true }) }
 }, 60000)
+
+it('retains bundled TypeScript errors when the auxiliary LSP publishes no diagnostics', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-tailwind-silent-'))
+  await writeFile(join(root, 'app.ts'), 'const value: number = "wrong";\n')
+  const { fileURLToPath } = await import('node:url')
+  const fixture = fileURLToPath(new URL('../fixtures/protocol-server.mjs', import.meta.url))
+  const h = await harness(root, {
+    servers: { phpantom: { enabled: false }, tailwind: { mode: 'path', command: process.execPath, args: [fixture, 'no-diagnostics'] } },
+    tailwind: { enabled: true },
+    timeouts: { diagnosticsMs: 10000, auxiliaryDiagnosticsMs: 1000 },
+  })
+  try {
+    const result = await h.extra.diagnostics({ workspaceRoot: root, filePath: 'app.ts' }, AbortSignal.timeout(10000))
+    expect(result.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ server: 'typescript', code: 2322, message: expect.stringContaining('not assignable') })]))
+    expect(result.omissions).toMatchObject([{ server: 'tailwind', reason: 'timeout' }])
+  } finally { await h.dispose(); await rm(root, { recursive: true, force: true }) }
+})

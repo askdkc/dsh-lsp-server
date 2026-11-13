@@ -60,7 +60,8 @@
     "check": "npm run typecheck && npm test && npm run build && npm run test:package",
     "test:package": "vitest run --config vitest.package.config.ts",
     "prepare": "npm run build",
-    "prepublishOnly": "pnpm install --frozen-lockfile --ignore-scripts --prod=false --optional=true && npm run check"
+    "prepublishOnly": "pnpm install --frozen-lockfile --ignore-scripts --prod=false --optional=true && npm run check",
+    "test:package:current": "DSH_CONSUMER_MODE=current vitest run --config vitest.package.config.ts"
   },
   "dependencies": {
     "@deepseek-ai/dsh-lsp": "0.2.2-rc.1",

@@ -32,6 +32,8 @@ process.stdin.on('data', chunk => {
         if (pendingCloseDiagnostics) send(pendingCloseDiagnostics)
         pendingCloseDiagnostics = undefined
         send({ method: 'textDocument/publishDiagnostics', params: { uri, diagnostics: source === 'clean' ? [] : [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }, severity: 1, message: source }] } })
+      } else if (mode === 'recover-diagnostics') {
+        if (existsSync(trace + '.ready')) send({ method: 'textDocument/publishDiagnostics', params: { uri, version: 1, diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }, severity: 2, message: 'recovered auxiliary' }] } })
       } else if (mode !== 'no-diagnostics' && mode !== 'pull-diagnostics') send({ method: 'textDocument/publishDiagnostics', params: { uri, version: 1, diagnostics: [] } })
     } else if (message.method === 'textDocument/didClose') {
       if (mode === 'late-close-diagnostics') pendingCloseDiagnostics = { method: 'textDocument/publishDiagnostics', params: { uri: message.params.textDocument.uri, diagnostics: [] } }

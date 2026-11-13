@@ -41,3 +41,11 @@ describe('resolveConfig', () => {
     expect(DEFAULT_CONFIG.tailwind.classAttributes).not.toContain('data-class')
   })
 })
+
+it('validates auxiliary diagnostic and retry budgets', () => {
+  expect(resolveConfig().timeouts).toMatchObject({ diagnosticsMs: 60000, auxiliaryDiagnosticsMs: 8000, diagnosticsRetryMs: 30000 })
+  for (const field of ['auxiliaryDiagnosticsMs', 'diagnosticsRetryMs']) {
+    for (const value of [0, -1, 1.5, NaN, Infinity, 2147483648]) expect(() => resolveConfig({ timeouts: { [field]: value } })).toThrow()
+    expect(resolveConfig({ timeouts: { [field]: 1 } }).timeouts).toHaveProperty(field, 1)
+  }
+})

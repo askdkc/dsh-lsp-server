@@ -20,7 +20,7 @@ import { normalizeCompletion } from '../protocol/normalize-completion.js'
 import { mergeHover } from '../merge/hover.js'
 import { mergeDiagnostics } from '../merge/diagnostics.js'
 import { mergeCompletions } from '../merge/completion.js'
-import type { CompletionRequest, CompletionResult, DiagnosticsRequest, DiagnosticsResult, LspPosition, NavigationResult, WebstackLspStatus } from '../service.js'
+import type { CompletionRequest, CompletionResult, DiagnosticOmission, DiagnosticsRequest, DiagnosticsResult, LspPosition, NavigationResult, WebstackLspStatus } from '../service.js'
 import { createCodeIntelligenceToolServiceV1 } from '../structure/code-intelligence.js'
 import { DocumentSnapshotStore } from '../structure/snapshots.js'
 import type { SnapshotRecord } from '../structure/snapshots.js'
@@ -51,6 +51,7 @@ export class WebstackLspRuntime {
   private readonly workspaces = new Map<string, HostSource>()
   private readonly lifetime = new AbortController()
   private readonly live = new Map<ServerSession, ServerId>()
+  private readonly diagnosticBackoff = new Map<string, { until: number; pending: boolean }>()
   private readonly starts = new Map<string, number>()
   private readonly restarts = new Map<ServerId, number>()
   constructor(private readonly config: ResolvedConfig, private readonly fs: HostFileSystem, private readonly subprocess: HostSubprocess) {
@@ -138,7 +139,7 @@ export class WebstackLspRuntime {
   }
 
   async diagnostics(request: DiagnosticsRequest, signal?: AbortSignal): Promise<DiagnosticsResult> {
-    const deadline = this.signal(this.config.timeouts.diagnosticsMs, signal)
+    const deadline = this.signal(Math.min(this.config.timeouts.diagnosticsMs, request.timeoutMs ?? Infinity), signal)
     if (!classifyFile(request.filePath, this.config.routing.bladeSuffixes)) {
       // Validate workspace containment, existence and read limits even for unsupported files.
       await this.snapshots.readFresh(providerScope(request.workspaceRoot), request.filePath, deadline)
@@ -151,18 +152,32 @@ export class WebstackLspRuntime {
   private async diagnosticsFromSource(request: DiagnosticsRequest, source: HostSource, route: Route, deadline: AbortSignal, signal?: AbortSignal): Promise<DiagnosticsResult> {
     const selected = [route.primary, ...(route.auxiliary && this.config.tailwind.enabled ? [route.auxiliary] : [])].filter(item => this.config.servers[item.server].enabled && (!request.servers || request.servers.includes(item.server)))
     if (!selected.length) throw new WebstackLspError('LSP_UNAVAILABLE', 'no selected diagnostic server supports this file')
-    const omittedServers: string[] = []
+    const omissions: DiagnosticOmission[] = []
     const groups = await Promise.all(selected.map(async item => {
+      const auxiliary = item.server !== route.primary.server
+      const key = `${item.server}\u0000${source.key}`
+      const state = auxiliary ? this.diagnosticBackoff.get(key) : undefined
+      if (state && (state.pending || state.until > Date.now())) {
+        if (this.config.missingServerPolicy === 'error') throw new WebstackLspError('LSP_UNAVAILABLE', `${item.server} diagnostics retry is deferred`)
+        omissions.push({ server: item.server, reason: state.pending ? 'in_progress' : 'cooldown', retryAfterMs: Math.max(0, state.until - Date.now()) })
+        return []
+      }
+      const attempt = { until: 0, pending: true }
+      if (auxiliary) this.diagnosticBackoff.set(key, attempt)
+      const budget = Math.min(this.config.timeouts.diagnosticsMs, request.timeoutMs ?? Infinity)
+      const itemDeadline = auxiliary ? this.signal(Math.min(this.config.timeouts.auxiliaryDiagnosticsMs, Math.max(1, Math.floor(budget * 0.8))), deadline) : deadline
       try {
-        const value = await this.document(item.server, source, item.languageId, deadline, async (session, connection, opened) => {
+        // Bound the result wait independently of process teardown. The pool still
+        // serializes cleanup before another request can reuse the server.
+        const value = await withAbort(this.document(item.server, source, item.languageId, itemDeadline, async (session, connection, opened) => {
           if (session.capabilities.diagnosticProvider) {
             await opened()
-            const report = await connection.request('textDocument/diagnostic', { textDocument: { uri: source.uri } }, deadline) as { items?: unknown }
+            const report = await connection.request('textDocument/diagnostic', { textDocument: { uri: source.uri } }, itemDeadline) as { items?: unknown }
             return report?.items ?? []
           }
           if (item.server === 'typescript' && supportsTypeScriptDiagnostics(session.capabilities)) {
             await opened()
-            return requestTypeScriptDiagnostics(connection, source.uri, deadline)
+            return requestTypeScriptDiagnostics(connection, source.uri, itemDeadline)
           }
           // Subscribe before didOpen; do not confuse a missing publication with a clean file.
           let remove = () => {}
@@ -172,17 +187,31 @@ export class WebstackLspRuntime {
               if (message.method === 'textDocument/publishDiagnostics' && p?.uri === source.uri && (p.version === undefined || p.version === 1)) resolve(p.diagnostics)
             })
           })
-          try { await opened(); return await withAbort(published, deadline) } finally { remove() }
-        }, true)
-        return normalizeDiagnostics(value, item.server, source.uri).filter(d => !request.severity || request.severity === 'all' || d.severity === (request.severity === 'error' ? 1 : 2))
+          try { await opened(); return await withAbort(published, itemDeadline) } finally { remove() }
+        }, true), itemDeadline)
+        const diagnostics = normalizeDiagnostics(value, item.server, source.uri).filter(d => !request.severity || request.severity === 'all' || d.severity === (request.severity === 'error' ? 1 : 2))
+        if (auxiliary) this.diagnosticBackoff.delete(key)
+        return diagnostics
       } catch (error) {
-        throwIfAborted(signal); throwIfAborted(this.lifetime.signal)
-        if (item.server === route.primary.server || this.config.missingServerPolicy === 'error') throw error
-        omittedServers.push(item.server)
+        // Caller cancellation (Stop) must never become a partial success.
+        if (signal?.aborted && signal.reason?.name !== 'TimeoutError') throwIfAborted(signal)
+        throwIfAborted(this.lifetime.signal)
+        const timedOut = itemDeadline.aborted && itemDeadline.reason?.name === 'TimeoutError'
+        if (!auxiliary || this.config.missingServerPolicy === 'error') {
+          if (timedOut) throw new DOMException(`${item.server} diagnostics timed out`, 'TimeoutError')
+          throw error
+        }
+        attempt.until = Date.now() + this.config.timeouts.diagnosticsRetryMs
+        omissions.push({ server: item.server, reason: timedOut ? 'timeout' : error instanceof WebstackLspError && error.code === 'LSP_UNAVAILABLE' ? 'unavailable' : 'error', retryAfterMs: this.config.timeouts.diagnosticsRetryMs })
         return []
+      } finally {
+        attempt.pending = false
+        if (auxiliary && !attempt.until && this.diagnosticBackoff.get(key) === attempt) this.diagnosticBackoff.delete(key)
       }
     }))
-    return { ...mergeDiagnostics(groups, { maxDiagnostics: Number.MAX_SAFE_INTEGER, maxResultChars: Number.MAX_SAFE_INTEGER }), ...(omittedServers.length ? { omittedServers: omittedServers.sort() } : {}) }
+    if (signal?.aborted && signal.reason?.name !== 'TimeoutError') throwIfAborted(signal)
+    throwIfAborted(this.lifetime.signal)
+    return { ...mergeDiagnostics(groups, { maxDiagnostics: Number.MAX_SAFE_INTEGER, maxResultChars: Number.MAX_SAFE_INTEGER }), ...(omissions.length ? { omittedServers: omissions.map(item => item.server).sort(), omissions: omissions.sort((a, b) => a.server.localeCompare(b.server)) } : {}) }
   }
 
   private async semanticFromSnapshot(scope: SnapshotScope, snapshot: SnapshotRecord, request: SemanticQuery, signal: AbortSignal): Promise<NavigationResult | DiagnosticsResult | CompletionResult> {
@@ -196,8 +225,8 @@ export class WebstackLspRuntime {
     const route = routeFor(file)
     let result: NavigationResult | DiagnosticsResult | CompletionResult
     if (request.operation === 'diagnostics') {
-      const deadline = this.signal(this.config.timeouts.diagnosticsMs, signal)
-      result = await this.diagnosticsFromSource({ workspaceRoot: scope.workspaceRoot, filePath: snapshot.descriptor.filePath, ...(request.severity ? { severity: request.severity } : {}), ...(request.servers ? { servers: request.servers } : {}) }, source, route, deadline, signal)
+      const deadline = this.signal(Math.min(this.config.timeouts.diagnosticsMs, request.timeoutMs ?? Infinity), signal)
+      result = await this.diagnosticsFromSource({ workspaceRoot: scope.workspaceRoot, filePath: snapshot.descriptor.filePath, ...(request.timeoutMs ? { timeoutMs: request.timeoutMs } : {}), ...(request.severity ? { severity: request.severity } : {}), ...(request.servers ? { servers: request.servers } : {}) }, source, route, deadline, signal)
     } else if (request.operation === 'completion') {
       const deadline = this.signal(this.config.timeouts.completionMs, signal)
       result = await this.completionFromSource({ workspaceRoot: scope.workspaceRoot, filePath: snapshot.descriptor.filePath, position: request.position! }, source, route, deadline, signal)
@@ -264,7 +293,7 @@ export class WebstackLspRuntime {
     try { await this.codeIntelligence.dispose?.() }
     finally {
       try { await this.pool.disposeAll() }
-      finally { await this.codeIntelligenceRuntime.dispose?.(); this.workspaces.clear(); this.live.clear() }
+      finally { await this.codeIntelligenceRuntime.dispose?.(); this.workspaces.clear(); this.live.clear(); this.diagnosticBackoff.clear() }
     }
   }
 

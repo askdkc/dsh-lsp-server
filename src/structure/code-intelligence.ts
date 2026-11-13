@@ -132,6 +132,7 @@ function validateSemanticQuery(request: SemanticQuery): void {
     throw new WebstackLspError('LSP_WORKSPACE_REQUIRED', 'semantic position must be a zero-based UTF-16 position')
   if (request.servers && (!Array.isArray(request.servers) || request.servers.length > 6 || request.servers.some(server => typeof server !== 'string' || server.length > 64)))
     throw new WebstackLspError('LSP_WORKSPACE_REQUIRED', 'semantic server filter is invalid')
+  if (request.timeoutMs !== undefined && (!Number.isSafeInteger(request.timeoutMs) || request.timeoutMs < 1 || request.timeoutMs > 2147483647)) throw new TypeError('timeoutMs must be a positive bounded integer')
   if (request.maxResults !== undefined && (!Number.isSafeInteger(request.maxResults) || request.maxResults < 1 || request.maxResults > 200))
     throw new WebstackLspError('LSP_STRUCTURE_LIMIT', 'maxResults must be between 1 and 200')
 }
