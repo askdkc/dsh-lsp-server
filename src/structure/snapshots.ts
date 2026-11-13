@@ -23,6 +23,7 @@ interface VersionRecord { hash: string; version: number; scopeKey: string }
 export type SnapshotReader = (workspaceRoot: string, filePath: string, maxBytes: number, signal?: AbortSignal) => Promise<HostSource>
 
 const EXTENSION_LANGUAGE: Record<string, StructureLanguage> = {
+  '.lisp': 'commonlisp', '.lsp': 'commonlisp', '.cl': 'commonlisp', '.asd': 'commonlisp',
   '.js': 'javascript', '.jsx': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript',
   '.ts': 'typescript', '.mts': 'typescript', '.cts': 'typescript',
   '.tsx': 'tsx',

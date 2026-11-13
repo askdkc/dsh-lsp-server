@@ -18,16 +18,22 @@ if (runtimeManifest.version !== manifest.runtime.version) throw new Error(`expec
 await Parser.init()
 await mkdir(outputGrammarDir, { recursive: true })
 for (const grammar of manifest.grammars) {
-  const packageRoot = join(root, 'node_modules', grammar.package)
-  const packageManifest = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8'))
-  if (packageManifest.version !== grammar.version) throw new Error(`expected ${grammar.package}@${grammar.version}, found ${packageManifest.version}`)
-
   const sourceAsset = join(sourceGrammarDir, grammar.asset)
-  const upstreamAsset = join(packageRoot, grammar.asset)
-  const [sourceBytes, upstreamBytes] = await Promise.all([readFile(sourceAsset), readFile(upstreamAsset)])
+  const sourceBytes = await readFile(sourceAsset)
   const sha256 = createHash('sha256').update(sourceBytes).digest('hex')
-  const upstreamSha256 = createHash('sha256').update(upstreamBytes).digest('hex')
-  if (sha256 !== grammar.sha256 || upstreamSha256 !== grammar.sha256) throw new Error(`${grammar.asset} does not match its pinned SHA-256`)
+  if (sha256 !== grammar.sha256) throw new Error(`${grammar.asset} does not match its pinned SHA-256`)
+  if (grammar.distribution === 'source-build') {
+    if (!grammar.sourceRepository || !/^[a-f0-9]{40}$/.test(grammar.sourceCommit) || !grammar.buildRecipe || !grammar.licenseFile)
+      throw new Error(`${grammar.asset} is missing source-build provenance`)
+    await copyFile(join(sourceGrammarDir, grammar.licenseFile), join(outputGrammarDir, grammar.licenseFile))
+  } else {
+    const packageRoot = join(root, 'node_modules', grammar.package)
+    const packageManifest = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8'))
+    if (packageManifest.version !== grammar.version) throw new Error(`expected ${grammar.package}@${grammar.version}, found ${packageManifest.version}`)
+    const upstreamBytes = await readFile(join(packageRoot, grammar.asset))
+    if (createHash('sha256').update(upstreamBytes).digest('hex') !== grammar.sha256)
+      throw new Error(`${grammar.asset} does not match its pinned SHA-256`)
+  }
 
   const language = await Language.load(sourceAsset)
   if (language.abiVersion !== grammar.abiVersion || language.abiVersion < MIN_COMPATIBLE_VERSION || language.abiVersion > LANGUAGE_VERSION)

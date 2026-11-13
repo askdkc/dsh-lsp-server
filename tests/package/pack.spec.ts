@@ -77,6 +77,7 @@ it.each(consumers)('loads the packed bundle through DSH %s admission and execute
     }
     await writeFile(join(root, 'app.ts'), 'const greeting: string = "hello";\nconsole.log(greeting)')
     await writeFile(join(root, 'app.js'), 'const value = 1;\n')
+    await writeFile(join(root, 'demo.lisp'), '(defun greet (name) name)\n')
     await writeFile(join(root, 'app.jsx'), 'const View = () => <div />;\n')
     await writeFile(join(root, 'app.tsx'), 'const View = () => <span />;\n')
     await writeFile(join(root, 'app.php'), '<?php\nclass Greeter { public function greet() {} }\nfunction helper() {}\n')
@@ -145,6 +146,7 @@ it.each(consumers)('loads the packed bundle through DSH %s admission and execute
         const code = ctx.get('codeIntelligenceRuntime');
         const scope = {ownerId:'packed-agent',sessionId:'packed-session',workspaceRoot:process.cwd()};
         for (const [file, language, name, text, start] of [
+          ['demo.lisp', 'commonlisp', 'greet', '(defun greet (name) name)', {line:0,character:0}],
           ['app.js', 'javascript', 'value', 'value = 1', {line:0,character:6}],
           ['app.jsx', 'javascript', 'View', 'View = () => <div />', {line:0,character:6}],
           ['app.ts', 'typescript', 'greeting', 'greeting: string = "hello"', {line:0,character:6}],

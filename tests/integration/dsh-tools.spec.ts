@@ -48,6 +48,15 @@ it('registers both tools in real DSH and enforces session workspace and schemas'
     expect(JSON.stringify(hover)).toContain('string')
     const status = await call('lsp_extra', { operation: 'status' }, false)
     expect(status).toMatchObject({ isError: false })
+    await writeFile(join(root, 'demo.lisp'), '(defun greet (name) name)\n')
+    const lisp = await call('lsp_extra', { operation: 'snapshot', action: 'open', file_path: 'demo.lisp' })
+    expect(lisp).toMatchObject({ isError: false, value: { language: 'commonlisp', parserAvailable: true, parseErrors: false } })
+    if (lisp.isError) throw new Error('Common Lisp snapshot failed')
+    const lispHandle = (lisp.value as { handle: string }).handle
+    expect(await call('lsp_extra', { operation: 'structure', action: 'outline', handle: lispHandle })).toMatchObject({
+      isError: false, value: { status: 'ok', declarations: [{ name: 'greet' }] },
+    })
+    expect(await call('lsp_extra', { operation: 'snapshot', action: 'release', handle: lispHandle })).toMatchObject({ isError: false, value: { released: true } })
     const snapshot = await call('lsp_extra', { operation: 'snapshot', action: 'open', file_path: 'app.ts' })
     expect(snapshot).toMatchObject({ isError: false })
     expect(JSON.stringify(snapshot)).toContain('"language":"typescript"')

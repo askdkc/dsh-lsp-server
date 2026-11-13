@@ -131,6 +131,7 @@ export class StructureEngine {
 
   capabilities(): Array<{ language: StructureLanguage; extensions: string[]; available: boolean; abiVersion: number | null; lastError?: string }> {
     return [
+      this.capability('commonlisp', ['.lisp', '.lsp', '.cl', '.asd'], 14),
       this.capability('javascript', ['.js', '.jsx', '.mjs', '.cjs'], 15),
       this.capability('typescript', ['.ts', '.mts', '.cts'], 14),
       this.capability('tsx', ['.tsx'], 14),

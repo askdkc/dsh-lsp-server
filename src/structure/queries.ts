@@ -1,5 +1,11 @@
 import type { StructureLanguage } from './types.js'
 
+// The grammar specializes lowercase defun forms, but CL symbols are normally
+// case-insensitive. Generic lists cover uppercase/mixed-case and package forms.
+const clWords = (words: string[]) => words.map(word => word.replace(/[a-z]/g, letter => `[${letter}${letter.toUpperCase()}]`)).join('|')
+const clDefinitions = `^(?:[cC][lL](?::|::))?(?:${clWords(['defun', 'defmacro', 'defgeneric', 'defmethod', 'defclass', 'defstruct', 'defvar', 'defparameter', 'defconstant', 'deftype', 'defpackage', 'define-condition'])})$`
+const clImports = `^(?:[cC][lL](?::|::))?(?:${clWords(['defpackage', 'in-package', 'require'])})$`
+
 // TypeScript and TSX share one grammar family, so TSX accepts the same patterns.
 const TS_DECLARATIONS = [
   '(function_declaration name: (_) @name) @declaration',
@@ -12,6 +18,11 @@ const TS_DECLARATIONS = [
 ]
 
 const declarations: Partial<Record<StructureLanguage, string[]>> = {
+  commonlisp: [
+    '(defun (defun_header function_name: (_) @name)) @declaration',
+    `((list_lit . [(sym_lit) (package_lit)] @_definition . (_) @name) @declaration (#match? @_definition "${clDefinitions}"))`,
+    `((list_lit . [(sym_lit) (package_lit)] @_definition . (_) @name) @declaration (#match? @_definition "^(?:[aA][sS][dD][fF](?::|::))?${clWords(['defsystem'])}$"))`,
+  ],
   php: [
     '(class_declaration name: (_) @name) @declaration',
     '(function_definition name: (_) @name) @declaration',
@@ -116,6 +127,7 @@ const declarations: Partial<Record<StructureLanguage, string[]>> = {
 }
 
 const imports: Partial<Record<StructureLanguage, string[]>> = {
+  commonlisp: [`((list_lit . [(sym_lit) (package_lit)] @_operator) @import (#match? @_operator "${clImports}"))`],
   javascript: ['(import_statement) @import', '(export_statement) @export'],
   typescript: ['(import_statement) @import', '(export_statement) @export'],
   tsx: ['(import_statement) @import', '(export_statement) @export'],

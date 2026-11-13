@@ -225,6 +225,18 @@
       "abiVersion": 14,
       "asset": "tree-sitter-scala.wasm",
       "sha256": "b7ec2bb29c19827abcefd18ed5cb5a43596009f96a5d53c5b9d1f9676d7521c3"
+    },
+    {
+      "language": "commonlisp",
+      "distribution": "source-build",
+      "sourceRepository": "https://github.com/tree-sitter-grammars/tree-sitter-commonlisp",
+      "sourceCommit": "32323509b3d9fe96607d151c2da2c9009eb13a2f",
+      "license": "MIT",
+      "licenseFile": "LICENSE.commonlisp",
+      "abiVersion": 14,
+      "asset": "tree-sitter-commonlisp.wasm",
+      "sha256": "94b711098d3a227c64e9605c6cee9df31fd9c2cc65e542a71c3448de946d7494",
+      "buildRecipe": "docs/commonlisp-grammar.md"
     }
   ]
 }

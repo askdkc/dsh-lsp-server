@@ -4,6 +4,7 @@ const port = (await import('node:worker_threads')).parentPort
 if (!port) throw new Error('structure worker requires a parent port')
 
 const assets = {
+  commonlisp: 'tree-sitter-commonlisp.wasm',
   javascript: 'tree-sitter-javascript.wasm',
   typescript: 'tree-sitter-typescript.wasm',
   tsx: 'tree-sitter-tsx.wasm',
