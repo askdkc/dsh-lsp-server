@@ -67,3 +67,25 @@ SHA-256 after the successful build:
 
 Source-backed integration tests and the build succeeded. Fresh isolated package
 installation and deployed-runtime execution are not established by those passes.
+
+## CI consumer resolution correction
+
+The subsequent CI run on `bcc26825692e0fea6156848403701a6c65582b10`
+([run 43391739537](https://github.com/askdkc/dsh-lsp-server/actions/runs/43391739537),
+job 131773076122) passed all 107 unit/integration tests and the build, then
+failed the published consumer smoke test. The selected `dsh-tools` latest tag
+was 0.0.1-rc.1, while the executor was 0.2.2-alpha.2. The executor's import of
+`dsh-tools/pipeline` failed with `ERR_PACKAGE_PATH_NOT_EXPORTED`. These numbers
+are the observed failed configuration, not requirements or selection rules.
+
+The default resolver now compares SemVer precedence across each package's
+latest/next/rc/beta/alpha tag targets. Explicit package-specific tag overrides
+still take precedence. It does not treat the presence of latest as evidence
+that latest is the newest version. Installed-profile resolution is unchanged.
+
+Regression tests reproduced the stale-latest selection before the correction
+(7 failures), then passed after it. Numeric major/minor and prerelease ordering,
+stable releases, build metadata, mixed package channels and explicit overrides
+are covered. Final `npm run typecheck` and `npm test` passed (21 files, 116 tests).
+`git diff --check` passed. Fresh registry installation and a new hosted CI run
+remain unverified; registry access from the execution host is unavailable.

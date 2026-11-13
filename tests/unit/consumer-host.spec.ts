@@ -21,8 +21,34 @@ it('resolves per-package published channels and rejects absent explicitly reques
   const { resolvePublishedConsumer } = await import('../package/consumer-host.js')
   const tags: Record<string, Record<string, string>> = { a: { latest: '1.2.3', next: '2.0.0-beta.1' }, b: { next: '4.5.6-rc.1' } }
   const lookup = async (name: string) => tags[name]!
-  expect(await resolvePublishedConsumer(['a', 'b'], lookup)).toEqual({ a: tags.a!.latest, b: tags.b!.next })
+  expect(await resolvePublishedConsumer(['a', 'b'], lookup)).toEqual({ a: tags.a!.next, b: tags.b!.next })
   expect(await resolvePublishedConsumer(['a'], lookup, { a: 'next' })).toEqual({ a: tags.a!.next })
   await expect(resolvePublishedConsumer(['a'], lookup, { a: 'alpha' })).rejects.toThrow('No published consumer version')
   await expect(resolvePublishedConsumer(['a'], lookup, { a: '1.2.3' })).rejects.toThrow('Invalid consumer tag')
+})
+
+// The package versions here are fixtures, not compatibility gates.
+it('does not let a stale latest tag mask newer release channels', async () => {
+  const { resolvePublishedConsumer } = await import('../package/consumer-host.js')
+  const metadata = {
+    tools: { latest: '0.0.1-rc.1', alpha: '0.2.2-alpha.3', rc: '0.2.2-rc.2' },
+    executor: { latest: '0.2.2-alpha.2', rc: '0.2.2-rc.2' },
+    core: { latest: '4.1.0', next: '4.0.6-alpha.2' },
+  }
+  expect(await resolvePublishedConsumer(Object.keys(metadata), async name => metadata[name as keyof typeof metadata])).toEqual({ tools: '0.2.2-rc.2', executor: '0.2.2-rc.2', core: '4.1.0' })
+  expect(await resolvePublishedConsumer(['tools'], async () => metadata.tools, { tools: 'latest' })).toEqual({ tools: metadata.tools.latest })
+})
+
+it.each([
+  [{ latest: '1.9.0', next: '1.10.0' }, '1.10.0'],
+  [{ latest: '1.0.0-rc.9', next: '1.0.0-rc.10' }, '1.0.0-rc.10'],
+  [{ latest: '1.0.0', rc: '1.0.0-rc.99' }, '1.0.0'],
+  [{ alpha: '1.0.0-alpha.1', beta: '1.0.0-beta.1' }, '1.0.0-beta.1'],
+  [{ latest: '1.0.0+build.1', next: '1.0.0+build.2' }, '1.0.0+build.1'],
+  [{ latest: '1.0.0-1', next: '1.0.0-alpha' }, '1.0.0-alpha'],
+  [{ latest: '1.0.0-alpha', next: '1.0.0-alpha.1' }, '1.0.0-alpha.1'],
+  [{ latest: '1.0.0', experimental: '99.0.0' }, '1.0.0'],
+])('orders published SemVer candidates correctly: %j', async (tags, expected) => {
+  const { resolvePublishedConsumer } = await import('../package/consumer-host.js')
+  expect(await resolvePublishedConsumer(['pkg'], async () => tags as Record<string, string>)).toEqual({ pkg: expected })
 })

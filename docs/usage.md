@@ -185,8 +185,8 @@ Primary diagnostic timeouts and strict-policy auxiliary timeouts throw
 
 ### Consumer compatibility tests
 
-`npm run test:package` resolves each host package from its published `latest`
-tag (falling back to `next`, `rc`, or `alpha` only when `latest` is absent),
+`npm run test:package` resolves each host package from the highest SemVer
+pointed to by its `latest`, `next`, `rc`, `beta`, or `alpha` tags,
 then verifies a frozen reinstall of the generated consumer lockfile.
 `DSH_CONSUMER_TAGS` accepts a JSON map of package names to preferred tags for
 hosts that use different release channels per package. The repository's own installation still

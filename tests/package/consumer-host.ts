@@ -47,11 +47,43 @@ export async function resolvePublishedConsumer(
   for (let offset = 0; offset < names.length; offset += 4) {
     await Promise.all(names.slice(offset, offset + 4).map(async name => {
       const tags = await lookup(name)
-      const tag = preferredTags[name] ?? ['latest', 'next', 'rc', 'alpha'].find(candidate => tags[candidate])
+      // npm's latest is a mutable channel label, not the highest published version.
+      // DSH packages can leave it pointing at an old API while rc/next advance.
+      const candidates = ['latest', 'next', 'rc', 'beta', 'alpha'].filter(tag => tags[tag])
+      const tag = preferredTags[name] ?? candidates.sort((a, b) => compareVersions(tags[b]!, tags[a]!))[0]
       const version = tag && tags[tag]
       if (!version || !/^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/.test(version)) throw new Error(`No published consumer version for ${name} (${tag ?? 'no supported tag'})`)
+      compareVersions(version, version)
       versions[name] = version
     }))
   }
   return versions
+}
+
+/** SemVer precedence; build metadata does not affect ordering. */
+function compareVersions(left: string, right: string): number {
+  const parse = (value: string) => {
+    const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(value)
+    if (!match) throw new Error(`Invalid published version: ${value}`)
+    const pre = match[4]?.split('.')
+    if (pre?.some(part => /^0\d+$/.test(part))) throw new Error(`Invalid published version: ${value}`)
+    return { core: match.slice(1, 4).map(BigInt), pre }
+  }
+  const a = parse(left), b = parse(right)
+  for (let index = 0; index < 3; index++) {
+    if (a.core[index]! < b.core[index]!) return -1
+    if (a.core[index]! > b.core[index]!) return 1
+  }
+  if (!a.pre || !b.pre) return a.pre ? -1 : b.pre ? 1 : 0
+  for (let index = 0; index < Math.max(a.pre.length, b.pre.length); index++) {
+    const x = a.pre[index], y = b.pre[index]
+    if (x === y) continue
+    if (x === undefined) return -1
+    if (y === undefined) return 1
+    const xn = /^\d+$/.test(x), yn = /^\d+$/.test(y)
+    if (xn && yn) return BigInt(x) < BigInt(y) ? -1 : 1
+    if (xn !== yn) return xn ? -1 : 1
+    return x < y ? -1 : 1
+  }
+  return 0
 }
