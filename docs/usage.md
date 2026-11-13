@@ -187,7 +187,12 @@ Primary diagnostic timeouts and strict-policy auxiliary timeouts throw
 
 `npm run test:package` resolves each host package from the highest SemVer
 pointed to by its `latest`, `next`, `rc`, `beta`, or `alpha` tags,
-then verifies a frozen reinstall of the generated consumer lockfile.
+then recursively reads the selected manifests and explicitly supplies all required
+peer dependencies before installation. Optional peers are not added merely
+because they are listed. Peer auto-installation stays disabled, matching DSH
+profiles, and the bundle's own LSP dependencies are never supplied by the host
+fixture. The test then verifies a frozen reinstall of the generated consumer
+lockfile.
 `DSH_CONSUMER_TAGS` accepts a JSON map of package names to preferred tags for
 hosts that use different release channels per package. The repository's own installation still
 uses `pnpm install --frozen-lockfile` in CI.
@@ -203,7 +208,6 @@ actual installed version is resolved independently, including parent-hoisted
 packages and packages that hide their manifest export. No common DSH version
 or published tag is substituted for an installed version. The exact versions are recorded in test
 output, then installed in the isolated consumer before the same admission and
-real tool-execution checks run. Missing packages fail explicitly, including the
-versions resolved so far. Set `DSH_CONSUMER_ROOT` with `npm run test:package` to
+real tool-execution checks run. Missing required packages fail explicitly. Set `DSH_CONSUMER_ROOT` with `npm run test:package` to
 run both consumers. `DSH_CONSUMER_OFFLINE=1` requires an already populated pnpm
 store; it does not skip installation or smoke tests.

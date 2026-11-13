@@ -89,3 +89,35 @@ stable releases, build metadata, mixed package channels and explicit overrides
 are covered. Final `npm run typecheck` and `npm test` passed (21 files, 116 tests).
 `git diff --check` passed. Fresh registry installation and a new hosted CI run
 remain unverified; registry access from the execution host is unavailable.
+
+
+## Required peer graph correction
+
+The follow-up CI run on `f060a89c206fe55581dddafaf9160dafe009cc33`
+([run 43392640160](https://github.com/askdkc/dsh-lsp-server/actions/runs/43392640160),
+job 131775986037) passed 116 tests and the build. Tag selection resolved the
+DSH host packages to the newer release. The smoke import then failed with
+`ERR_MODULE_NOT_FOUND` for `@deepseek-ai/dsh-error`, imported by
+`@deepseek-ai/dsh-working-directory`. This was a separate defect in the manually
+maintained consumer package list; changing tag ordering did not supply peers.
+
+The upstream working-directory manifest on master at inspection time declares
+that package as a required peer. Consumer setup now traverses required peers
+recursively from the exact selected package manifests. Published tests resolve
+new peers through the same moving tag policy; installed-profile tests resolve
+them from that profile. Optional peers remain optional, cycles are visited once,
+metadata identity is checked, and bundled LSP packages cannot be silently seeded
+by the host. No package-version-specific branch was introduced.
+
+A subprocess regression reproduces an actual ESM missing-peer import failure
+with the incomplete seed list, expands a transitive/cyclic peer graph, and
+successfully imports the resulting graph. This exercises Node's module loader,
+not just the resolver's returned object. The published consumer's npm installation
+and hosted smoke execution still require registry access; they are not claimed
+as passing from this local fixture test.
+
+Final checks for this correction: typecheck, all 118 unit/integration tests
+(21 files), build and diff whitespace validation passed. `npm run test:package`
+was attempted again with the final source and stopped at registry metadata
+lookup with `ENOTFOUND registry.npmjs.org`; installation and smoke execution
+therefore did not start. No new hosted CI success is asserted.

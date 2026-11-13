@@ -52,3 +52,51 @@ it.each([
   const { resolvePublishedConsumer } = await import('../package/consumer-host.js')
   expect(await resolvePublishedConsumer(['pkg'], async () => tags as Record<string, string>)).toEqual({ pkg: expected })
 })
+
+it('completes required peer dependencies recursively and loads their real ESM imports', async () => {
+  const { expandConsumerPeers } = await import('../package/consumer-host.js')
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const exec = promisify(execFile)
+  const root = await mkdtemp(join(tmpdir(), 'consumer-peer-import-'))
+  const manifests = {
+    '@fixture/directory': { name: '@fixture/directory', version: '1.0.0', peerDependencies: { '@fixture/error': '*', '@fixture/optional': '*' }, peerDependenciesMeta: { '@fixture/optional': { optional: true } } },
+    '@fixture/error': { name: '@fixture/error', version: '2.0.0', peerDependencies: { '@fixture/brand': '*' } },
+    '@fixture/brand': { name: '@fixture/brand', version: '3.0.0', peerDependencies: { '@fixture/directory': '*' } },
+  }
+  const sources = {
+    '@fixture/directory': "export { marker } from '@fixture/error'",
+    '@fixture/error': "export { marker } from '@fixture/brand'",
+    '@fixture/brand': "export const marker = 'peer graph loaded'",
+  }
+  type Name = keyof typeof manifests
+  const install = async (name: Name) => {
+    const directory = join(root, 'node_modules', name)
+    await mkdir(directory, { recursive: true })
+    await writeFile(join(directory, 'package.json'), JSON.stringify({ ...manifests[name], type: 'module', exports: './index.js' }))
+    await writeFile(join(directory, 'index.js'), sources[name])
+  }
+  try {
+    await install('@fixture/directory')
+    const run = () => exec(process.execPath, ['--input-type=module', '-e', "import { marker } from '@fixture/directory'; console.log(marker)"], { cwd: root })
+    // Reproduce CI's failure with the incomplete seed list before expanding peers.
+    await expect(run()).rejects.toMatchObject({ stderr: expect.stringContaining('ERR_MODULE_NOT_FOUND') })
+    const reads: string[] = []
+    const versions = await expandConsumerPeers({ '@fixture/directory': manifests['@fixture/directory'].version }, async name => {
+      reads.push(name)
+      return manifests[name as Name]
+    }, async names => Object.fromEntries(names.map(name => [name, manifests[name as Name].version])))
+    expect(Object.keys(versions).sort()).toEqual(Object.keys(manifests).sort())
+    expect(reads).toHaveLength(3) // Cycles do not repeat metadata reads.
+    for (const name of Object.keys(versions) as Name[]) await install(name)
+    expect((await run()).stdout.trim()).toBe('peer graph loaded')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('fails on unresolved peers and never seeds the bundled LSP packages', async () => {
+  const { expandConsumerPeers } = await import('../package/consumer-host.js')
+  const manifest = { name: 'host', version: '1.0.0', peerDependencies: { missing: '*' } }
+  await expect(expandConsumerPeers({ host: '1.0.0' }, async () => manifest, async () => ({}))).rejects.toThrow('Required consumer peer was not resolved')
+  await expect(expandConsumerPeers({ host: '1.0.0' }, async () => ({ ...manifest, peerDependencies: { '@deepseek-ai/dsh-lsp': '*' } }), async () => ({}))).rejects.toThrow("must not mask the bundle's own dependencies")
+  await expect(expandConsumerPeers({ host: '1.0.0' }, async () => ({ ...manifest, version: '2.0.0' }), async () => ({}))).rejects.toThrow('identity mismatch')
+})

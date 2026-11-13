@@ -6,30 +6,82 @@ import { dirname, join, resolve } from 'node:path'
  * Never infer a sibling version from one DSH package's version or dist-tag.
  */
 export async function resolveConsumerHost(root: string, names: string[]): Promise<Record<string, string>> {
-  const require = createRequire(join(resolve(root), 'package.json'))
   const versions: Record<string, string> = {}
   for (const name of names) {
-    let path: string
-    try { path = require.resolve(`${name}/package.json`) }
-    catch {
-      // Some packages export their entry but not their manifest.
-      try {
-        let directory = dirname(require.resolve(name))
-        while (true) {
-          const candidate = join(directory, 'package.json')
-          const manifest = await readFile(candidate, 'utf8').then(JSON.parse).catch(() => undefined)
-          if (manifest?.name === name) { path = candidate; break }
-          const parent = dirname(directory)
-          if (parent === directory) throw new Error('manifest not found')
-          directory = parent
-        }
-      } catch { throw new Error(`Current DSH consumer is missing ${name} under ${root}; supply a complete installed host with DSH_CONSUMER_ROOT (no version substitution is performed). Resolved packages: ${JSON.stringify(versions)}`) }
-    }
-    const manifest = JSON.parse(await readFile(path, 'utf8'))
-    if (manifest.name !== name || typeof manifest.version !== 'string' || !/^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/.test(manifest.version)) throw new Error(`Invalid installed manifest for ${name}: ${path}`)
+    const manifest = await readConsumerManifest(root, name)
     versions[name] = manifest.version
   }
   return versions
+}
+
+export interface ConsumerManifest {
+  name: string
+  version: string
+  peerDependencies?: Record<string, string>
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>
+}
+
+export async function readConsumerManifest(root: string, name: string): Promise<ConsumerManifest> {
+  const require = createRequire(join(resolve(root), 'package.json'))
+  let path: string
+  try { path = require.resolve(`${name}/package.json`) }
+  catch {
+    try {
+      let directory = dirname(require.resolve(name))
+      while (true) {
+        const candidate = join(directory, 'package.json')
+        const manifest = await readFile(candidate, 'utf8').then(JSON.parse).catch(() => undefined)
+        if (manifest?.name === name) { path = candidate; break }
+        const parent = dirname(directory)
+        if (parent === directory) throw new Error('manifest not found')
+        directory = parent
+      }
+    } catch { throw new Error(`Current DSH consumer is missing ${name} under ${root}; supply a complete installed host with DSH_CONSUMER_ROOT (no version substitution is performed)`) }
+  }
+  const manifest = JSON.parse(await readFile(path, 'utf8'))
+  if (manifest.name !== name || typeof manifest.version !== 'string') throw new Error(`Invalid installed manifest for ${name}: ${path}`)
+  compareVersions(manifest.version, manifest.version)
+  return manifest
+}
+
+/** Peer auto-installation is disabled in DSH profiles. Supply the host's entire
+ * required peer closure explicitly instead of maintaining a stale manual list.
+ * Never seed the bundle's own LSP dependencies: that would hide packaging bugs.
+ */
+export async function expandConsumerPeers(
+  initial: Record<string, string>,
+  readManifest: (name: string, version: string) => Promise<ConsumerManifest>,
+  resolvePeers: (names: string[]) => Promise<Record<string, string>>,
+): Promise<Record<string, string>> {
+  const versions = { ...initial }
+  const visited = new Set<string>()
+  while (true) {
+    const pending = Object.keys(versions).filter(name => !visited.has(name))
+    if (!pending.length) return versions
+    const missing = new Set<string>()
+    for (let offset = 0; offset < pending.length; offset += 4) {
+      await Promise.all(pending.slice(offset, offset + 4).map(async name => {
+        const manifest = await readManifest(name, versions[name]!)
+        if (manifest.name !== name || manifest.version !== versions[name]) throw new Error(`Consumer manifest identity mismatch: ${name}@${versions[name]}`)
+        for (const peer of Object.keys(manifest.peerDependencies ?? {})) {
+          if (manifest.peerDependenciesMeta?.[peer]?.optional || versions[peer]) continue
+          if (peer === '@deepseek-ai/dsh-lsp' || peer === '@deepseek-ai/dsh-tool-lsp') throw new Error(`Host peer ${peer} must not mask the bundle's own dependencies`)
+          missing.add(peer)
+        }
+        visited.add(name)
+      }))
+    }
+    if (Object.keys(versions).length + missing.size > 256) throw new Error('Consumer peer graph exceeds 256 packages')
+    if (missing.size) {
+      const resolved = await resolvePeers([...missing].sort())
+      for (const name of missing) {
+        const version = resolved[name]
+        if (!version) throw new Error(`Required consumer peer was not resolved: ${name}`)
+        compareVersions(version, version)
+        versions[name] = version
+      }
+    }
+  }
 }
 
 /** Moving consumer: resolve tags per package, then pin only the resulting test lock. */

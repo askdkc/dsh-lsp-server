@@ -4,7 +4,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile, access, unlink } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { resolveConsumerHost, resolvePublishedConsumer } from './consumer-host.js'
+import { resolveConsumerHost, resolvePublishedConsumer, readConsumerManifest, expandConsumerPeers } from './consumer-host.js'
 const exec = promisify(execFile)
 const consumers = process.env.DSH_CONSUMER_MODE === 'current' ? ['current'] : ['published', ...(process.env.DSH_CONSUMER_ROOT ? ['current'] : [])]
 it.each(consumers)('loads the packed bundle through DSH %s admission and executes LSP queries', async hostVersion => {
@@ -34,12 +34,22 @@ it.each(consumers)('loads the packed bundle through DSH %s admission and execute
       '@deepseek-ai/cordis-plugin-group', '@deepseek-ai/cordis-plugin-loader', '@deepseek-ai/cordis-plugin-include',
     )
     if (hostVersion === 'current' && !process.env.DSH_CONSUMER_ROOT) throw new Error('DSH_CONSUMER_ROOT must point to the installed DSH profile or host root')
-    const dependencies = hostVersion === 'current'
+    const npmView = async (spec: string, fields: string[] = []) => {
+      const result = await exec('npm', ['view', spec, ...fields, '--json', '--fetch-retries=0', '--fetch-timeout=10000', '--cache', join(root, 'npm-cache')], { timeout: 15000 })
+      return JSON.parse(result.stdout)
+    }
+    const tags = JSON.parse(process.env.DSH_CONSUMER_TAGS ?? '{}')
+    const initial = hostVersion === 'current'
       ? await resolveConsumerHost(process.env.DSH_CONSUMER_ROOT!, hostPackages)
-      : await resolvePublishedConsumer(hostPackages, async name => {
-          const result = await exec('npm', ['view', name, 'dist-tags', '--json', '--fetch-retries=0', '--fetch-timeout=10000', '--cache', join(root, 'npm-cache')], { timeout: 15000 })
-          return JSON.parse(result.stdout)
-        }, JSON.parse(process.env.DSH_CONSUMER_TAGS ?? '{}'))
+      : await resolvePublishedConsumer(hostPackages, name => npmView(name, ['dist-tags']), tags)
+    const dependencies = await expandConsumerPeers(initial,
+      (name, version) => hostVersion === 'current'
+        ? readConsumerManifest(process.env.DSH_CONSUMER_ROOT!, name)
+        : npmView(`${name}@${version}`),
+      names => hostVersion === 'current'
+        ? resolveConsumerHost(process.env.DSH_CONSUMER_ROOT!, names)
+        : resolvePublishedConsumer(names, name => npmView(name, ['dist-tags'])),
+    )
     // Keep the exact per-package resolution in test output even when installation fails.
     console.log('DSH consumer versions:', JSON.stringify({ consumer: hostVersion, packages: dependencies }))
     await writeFile(join(root, 'consumer-versions.json'), JSON.stringify(dependencies, null, 2))
