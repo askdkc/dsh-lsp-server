@@ -200,8 +200,10 @@ it.each(consumers)('loads the packed bundle through DSH %s admission and execute
         const result = await ctx.get('lsp').query({workspaceRoot:process.cwd(),filePath:'app.ts',operation:'hover',position:{line:1,character:14}});
         const html = await ctx.get('webstackLsp').completion({workspaceRoot:process.cwd(),filePath:'index.html',position:{line:0,character:1}});
         const css = await ctx.get('webstackLsp').completion({workspaceRoot:process.cwd(),filePath:'style.css',position:{line:0,character:7}});
+        // systemPrompt awaits its session projection during activation.
+        await ctx.plugin(SessionProjections);
         await ctx.plugin(Prompt, {}); await ctx.plugin(Tools, {});
-        await ctx.plugin(NativeExecutor); await ctx.plugin(Sessions); await ctx.plugin(SessionProjections);
+        await ctx.plugin(NativeExecutor); await ctx.plugin(Sessions);
         await ctx.plugin(WorkingDirectory, {defaultDirectory:process.cwd()});
         assert.throws(() => standard.apply(ctx, {maxLocations:200, maxResultChars:32000, timeoutMs:0}), /tool-lsp: timeoutMs/);
         await ctx.plugin(standard, {}); await ctx.plugin(extra, {});

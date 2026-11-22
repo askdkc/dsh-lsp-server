@@ -5,7 +5,7 @@ import { SERVER_IDS } from '../config.js'
 import { readSource, type HostFileSystem, type HostSource } from '../host/dsh.js'
 import { classifyFile, supportedFileSuffixes } from '../routing/classifier.js'
 import { routeFor, type Route } from '../routing/route-table.js'
-import { hasTailwindCandidate } from '../routing/tailwind-candidate.js'
+import { hasScriptClassContext, hasTailwindCandidate } from '../routing/tailwind-candidate.js'
 import { resolveLaunch, initializationOptions, serverConfiguration } from '../servers/launch.js'
 import { supportsTypeScriptDiagnostics, requestTypeScriptDiagnostics } from '../servers/typescript-diagnostics.js'
 import { ServerSession } from './server-session.js'
@@ -150,7 +150,12 @@ export class WebstackLspRuntime {
   }
 
   private async diagnosticsFromSource(request: DiagnosticsRequest, source: HostSource, route: Route, deadline: AbortSignal, signal?: AbortSignal): Promise<DiagnosticsResult> {
-    const selected = [route.primary, ...(route.auxiliary && this.config.tailwind.enabled ? [route.auxiliary] : [])].filter(item => this.config.servers[item.server].enabled && (!request.servers || request.servers.includes(item.server)))
+    const selected = [route.primary, ...(route.auxiliary ? [route.auxiliary] : [])].filter(item => {
+      if (!this.config.servers[item.server].enabled) return false
+      if (item.server === 'tailwind' && !this.config.tailwind.enabled) return false
+      if (request.servers) return request.servers.includes(item.server)
+      return item.server !== 'tailwind' || this.tailwindDiagnosticsCandidate(route, source)
+    })
     if (!selected.length) throw new WebstackLspError('LSP_UNAVAILABLE', 'no selected diagnostic server supports this file')
     const omissions: DiagnosticOmission[] = []
     const groups = await Promise.all(selected.map(async item => {
@@ -310,6 +315,13 @@ export class WebstackLspRuntime {
   private validatePosition(text: string, position: LspPosition): void {
     const line = text.split(/\r?\n/)[position.line]
     if (!Number.isSafeInteger(position.line) || !Number.isSafeInteger(position.character) || position.line < 0 || position.character < 0 || line === undefined || position.character > line.length) throw new RangeError('position is outside document (zero-based UTF-16 required)')
+  }
+  private tailwindDiagnosticsCandidate(route: Route, source: HostSource): boolean {
+    const language = route.primary.languageId
+    if (language !== 'typescript' && language !== 'javascript') return true
+    const { tailwind, routing } = this.config
+    return routing.tailwindLanguages.includes(language) && (tailwind.queryStrategy === 'always'
+      || hasScriptClassContext(source.text, tailwind.classAttributes, tailwind.classRegex))
   }
   private useTailwind(route: Route, source: HostSource, position: LspPosition): boolean {
     return !!route.auxiliary && this.config.tailwind.enabled && this.config.servers.tailwind.enabled && (route.primary.languageId === 'blade' || this.config.routing.tailwindLanguages.includes(route.primary.languageId) || route.primary.languageId === 'css') && (this.config.tailwind.queryStrategy === 'always' || hasTailwindCandidate(source.text, position.line, this.config.tailwind.classRegex, position.character, this.config.tailwind.classAttributes))

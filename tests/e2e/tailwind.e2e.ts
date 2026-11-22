@@ -31,7 +31,7 @@ it('retains bundled TypeScript errors when the auxiliary LSP publishes no diagno
   const fixture = fileURLToPath(new URL('../fixtures/protocol-server.mjs', import.meta.url))
   const h = await harness(root, {
     servers: { phpantom: { enabled: false }, tailwind: { mode: 'path', command: process.execPath, args: [fixture, 'no-diagnostics'] } },
-    tailwind: { enabled: true },
+    tailwind: { enabled: true, queryStrategy: 'always' },
     timeouts: { diagnosticsMs: 10000, auxiliaryDiagnosticsMs: 1000 },
   })
   try {

@@ -97,6 +97,8 @@ Override the existing provider row in your profile's `cordis.patch.yml`, using D
 
 Each server accepts `enabled`, `mode` (`bundled` or `path`), `command`, `args`, `env`, `initializationOptions`, and `configuration`. In `path` mode, `command` is required except for PHPantom. `env` is passed through DSH's subprocess service and layered onto its scrubbed environment. `workspace/configuration` resolves requested sections from `configuration`.
 
+With the default candidate strategy, diagnostics on plain TypeScript and JavaScript files query Tailwind only when the file contains a class context, such as a `clsx(...)` call or a configured class attribute or regex match. Use `servers: ["tailwind"]` on a diagnostics request to query it explicitly, or set `queryStrategy: always` to include it automatically for enabled script languages.
+
 Other options include `providerId`, `limits.maxDocumentBytes`, `limits.maxMessageBytes`, `limits.maxStderrBytes`, operation-specific `timeouts`, `routing.bladeSuffixes`, and Tailwind `classAttributes`, `classRegex`, `includeLanguages`, and `queryStrategy` (`candidate` or `always`). See [configuration defaults](../src/config.ts) for defaults. Tool row `tool-lsp-extra` accepts `maxDiagnostics`, `maxCompletions`, `maxResultChars`, and `timeoutMs`.
 
 Bundled mode resolves executables on the Node host and is intended for local DSH filesystem/subprocess backends. Remote backends require `path` mode with executables and dependencies installed in that execution environment; remote operation is not covered by this test suite.

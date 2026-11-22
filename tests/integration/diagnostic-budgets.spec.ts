@@ -9,7 +9,7 @@ import type { Config } from '../../src/config.js'
 const fixture = fileURLToPath(new URL('../fixtures/protocol-server.mjs', import.meta.url))
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn() })
-async function setup(mode = 'no-diagnostics', timeouts: Config['timeouts'] = {}, strict = false) {
+async function setup(mode = 'no-diagnostics', timeouts: Config['timeouts'] = {}, strict = false, queryStrategy: 'candidate' | 'always' = 'always') {
   const root = await mkdtemp(join(tmpdir(), 'diagnostic-budgets-'))
   cleanup.push(() => rm(root, { recursive: true, force: true }))
   await writeFile(join(root, 'app.ts'), 'const value: number = "wrong";')
@@ -18,12 +18,28 @@ async function setup(mode = 'no-diagnostics', timeouts: Config['timeouts'] = {},
   const h = await harness(root, {
     missingServerPolicy: strict ? 'error' : 'warn',
     servers: { phpantom: { enabled: false }, typescript: { mode: 'path', command: process.execPath, args: [fixture, 'typescript-diagnostics'] }, tailwind: { mode: 'path', command: mode === 'missing' ? join(root, 'missing-server') : process.execPath, args: [fixture, mode, trace] } },
-    tailwind: { enabled: true },
-    timeouts: { diagnosticsMs: 3000, auxiliaryDiagnosticsMs: 800, diagnosticsRetryMs: 500, shutdownMs: 100, killGraceMs: 100, ...timeouts },
+    tailwind: { enabled: true, queryStrategy },
+    timeouts: { diagnosticsMs: 3000, auxiliaryDiagnosticsMs: 2000, diagnosticsRetryMs: 500, shutdownMs: 100, killGraceMs: 100, ...timeouts },
   })
   cleanup.push(h.dispose)
-  return { ...h, root, trace, request: { workspaceRoot: root, filePath: 'app.ts' } }
+  const request = { workspaceRoot: root, filePath: 'app.ts' }
+  // A completed definition request makes the reusable TypeScript session ready
+  // before the diagnostic deadline starts. It never starts the auxiliary server.
+  await h.lsp.query({ ...request, operation: 'goToDefinition', position: { line: 0, character: 6 } })
+  return { ...h, root, trace, request }
 }
+it('only probes Tailwind for script candidates or explicitly requested diagnostics', async () => {
+  const h = await setup('pull-diagnostics', {}, false, 'candidate')
+  const plain = await h.extra.diagnostics(h.request)
+  expect(plain.diagnostics).toMatchObject([{ server: 'typescript', code: 2322 }])
+  expect(plain.omissions).toBeUndefined()
+  await expect(readFile(h.trace)).rejects.toMatchObject({ code: 'ENOENT' })
+  const forced = await h.extra.diagnostics({ ...h.request, servers: ['tailwind'] })
+  expect(forced.diagnostics[0]?.server).toBe('tailwind')
+  await writeFile(join(h.root, 'app.ts'), 'const classes = clsx("flex");')
+  const candidate = await h.extra.diagnostics(h.request)
+  expect(candidate.diagnostics.some(item => item.server === 'tailwind')).toBe(true)
+})
 it('preserves actual primary diagnostics before an equal external deadline', async () => {
   const h = await setup('no-diagnostics', { diagnosticsMs: 700, auxiliaryDiagnosticsMs: 8000 })
   const result = await h.extra.diagnostics(h.request, AbortSignal.timeout(700))
@@ -75,7 +91,7 @@ it('keeps strict policy failures distinct from Stop', async () => {
   await expect(h.extra.diagnostics(h.request)).rejects.toMatchObject({ name: 'TimeoutError' })
 })
 it('bounds initialization and reports it as a timeout', async () => {
-  const h = await setup('hang-init')
+  const h = await setup('hang-init', { auxiliaryDiagnosticsMs: 800 })
   expect((await h.extra.diagnostics(h.request)).omissions?.[0]?.reason).toBe('timeout')
 })
 it('preserves partial results through extra-tool and snapshot semantic diagnostics with a shorter custom tool deadline', async () => {

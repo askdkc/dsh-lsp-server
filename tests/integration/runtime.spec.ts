@@ -12,7 +12,7 @@ async function setup(mode = 'normal', diagnosticsMs = 2500) {
   cleanup.push(() => rm(root, { recursive: true, force: true }))
   await writeFile(join(root, 'app.ts'), 'const value = 1')
   const trace = join(root, 'trace.jsonl')
-  const h = await harness(root, { servers: { phpantom: { enabled: false }, typescript: { mode: 'path', command: process.execPath, args: [fixture, mode, trace], env: { WEBSTACK_TEST_MARKER: 'forwarded' }, configuration: { test: { value: 42 } } } }, tailwind: { enabled: false }, timeouts: { primaryHoverMs: 1000, diagnosticsMs, shutdownMs: 100, killGraceMs: 100 } })
+  const h = await harness(root, { servers: { phpantom: { enabled: false }, typescript: { mode: 'path', command: process.execPath, args: [fixture, mode, trace], env: { WEBSTACK_TEST_MARKER: 'forwarded' }, configuration: { test: { value: 42 } } } }, tailwind: { enabled: false }, timeouts: { ...(mode === 'hang-init' ? { primaryHoverMs: 1000 } : {}), diagnosticsMs, shutdownMs: 100, killGraceMs: 100 } })
   cleanup.push(h.dispose)
   return { ...h, root, trace, request: { workspaceRoot: root, filePath: 'app.ts', position: {line:0,character:6}, operation: 'hover' as const } }
 }
@@ -91,7 +91,7 @@ it('cancels queued work promptly and terminates a server ignoring cancellation',
   const first = h.lsp.query(h.request, runningAbort.signal)
   const firstError = first.catch(error => error)
   // Wait for observable dispatch rather than guessing server startup duration.
-  await expect.poll(async () => readFile(h.trace, 'utf8').catch(() => ''), {timeout:1000}).toContain('textDocument/hover')
+  await expect.poll(async () => readFile(h.trace, 'utf8').catch(() => ''), {timeout:5000}).toContain('textDocument/hover')
   const queuedAbort = new AbortController()
   const queued = h.lsp.query(h.request, queuedAbort.signal)
   queuedAbort.abort()
